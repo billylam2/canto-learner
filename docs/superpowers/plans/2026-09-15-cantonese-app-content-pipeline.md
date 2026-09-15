@@ -904,7 +904,7 @@ git commit -m "feat: add content repository functions for levels and vocab items
 **Interfaces:**
 - Produces: `createTtsClient(): TextToSpeechClient`, `synthesizeCantonese(client: TextToSpeechClient, text: string): Promise<Buffer>` from `@/lib/content/tts` — consumed by Task 7's sync script.
 
-**Manual setup required before running the sync script (Task 8), not before this task's tests:** a Google Cloud project with the Text-to-Speech API enabled and a service account JSON key, with `GOOGLE_APPLICATION_CREDENTIALS` pointing to that key file locally. This task's tests mock the client entirely and need no real credentials.
+**Manual setup required before running the sync script (Task 8), not before this task's tests:** a Google Cloud project with the Text-to-Speech API enabled, and local Application Default Credentials from `gcloud auth application-default login` (see Task 8, Step 1 — service account keys are blocked on many Google accounts by an Organization Policy). This task's tests mock the client entirely and need no real credentials.
 
 - [ ] **Step 1: Add the dependency**
 
@@ -1175,7 +1175,27 @@ git commit -m "feat: add content sync script"
 
 - [ ] **Step 1: Set up Google Cloud Text-to-Speech**
 
-In the Google Cloud Console: create a project (or reuse one), enable the "Cloud Text-to-Speech API," create a service account with the "Cloud Text-to-Speech User" role, and download its JSON key.
+In the Google Cloud Console: create a project (or reuse one) and enable the "Cloud Text-to-Speech API."
+
+Service account key creation is blocked by an Organization Policy
+(`iam.disableServiceAccountKeyCreation`) on many Google accounts,
+especially Google Workspace-managed ones — this is common and not
+something you need an admin to lift. Instead, authenticate locally via
+Application Default Credentials, which uses your own Google login
+rather than a downloadable key. Install the Google Cloud CLI
+(`brew install --cask google-cloud-sdk` on macOS), then run:
+
+```bash
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+gcloud auth application-default login
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+```
+
+As the project owner, your account already has permission to call the
+Text-to-Speech API — no service account is needed. `createTtsClient()`
+in `src/lib/content/tts.ts` needs no changes: the client library
+automatically finds these credentials.
 
 - [ ] **Step 2: Run the migration**
 
@@ -1183,11 +1203,7 @@ Open the Supabase SQL Editor for the project used in Plan 1, and run the content
 
 - [ ] **Step 3: Set local credentials**
 
-In your `.env.local` (already gitignored), ensure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set (from Plan 1), and add:
-
-```
-GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/your-service-account-key.json
-```
+In your `.env.local` (already gitignored), ensure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set (from Plan 1). Do **not** set `GOOGLE_APPLICATION_CREDENTIALS` — leave it unset so the client library uses the Application Default Credentials from Step 1 instead.
 
 - [ ] **Step 4: Run the sync script**
 
