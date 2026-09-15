@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { LevelSource } from '../../../content/vocab'
+import type { VocabGameItem } from '../game/round'
 
 export async function upsertLevel(supabase: SupabaseClient, level: LevelSource): Promise<void> {
   const { error } = await supabase
@@ -62,4 +63,43 @@ export async function linkVocabToLevel(
   if (error) {
     throw new Error(`Failed to link vocab item ${vocabItemId} to level ${levelId}: ${error.message}`)
   }
+}
+
+export async function getVocabItemsForLevel(
+  supabase: SupabaseClient,
+  levelId: number
+): Promise<VocabGameItem[]> {
+  const { data: links, error: linksError } = await supabase
+    .from('level_vocab')
+    .select('vocab_item_id')
+    .eq('level_id', levelId)
+
+  if (linksError) {
+    throw new Error(`Failed to fetch level_vocab for level ${levelId}: ${linksError.message}`)
+  }
+
+  const vocabItemIds = (links ?? []).map((link: { vocab_item_id: string }) => link.vocab_item_id)
+  if (vocabItemIds.length === 0) {
+    return []
+  }
+
+  const { data: items, error: itemsError } = await supabase
+    .from('vocab_items')
+    .select('id, slug, audio_url, image_url, homophone_group')
+    .in('id', vocabItemIds)
+    .order('created_at', { ascending: true })
+
+  if (itemsError) {
+    throw new Error(`Failed to fetch vocab items for level ${levelId}: ${itemsError.message}`)
+  }
+
+  return (items ?? []).map(
+    (item: { id: string; slug: string; audio_url: string; image_url: string; homophone_group: string | null }) => ({
+      id: item.id,
+      slug: item.slug,
+      audioUrl: item.audio_url,
+      imageUrl: item.image_url,
+      homophoneGroup: item.homophone_group,
+    })
+  )
 }
