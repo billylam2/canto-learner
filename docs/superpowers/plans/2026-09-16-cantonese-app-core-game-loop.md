@@ -473,7 +473,7 @@ git commit -m "feat: add level status logic and level-select page"
 - Test: `src/lib/game/round.test.ts`
 
 **Interfaces:**
-- Produces: `VocabGameItem` interface (`{ id: string; slug: string; audioUrl: string; imageUrl: string; homophoneGroup: string | null }`), `buildRounds(items: VocabGameItem[], maxRoundSize?: number): VocabGameItem[][]`, `pickDistractors(pool: VocabGameItem[], target: VocabGameItem, count: number, random?: () => number): VocabGameItem[]` from `@/lib/game/round` — consumed by Task 4 (level game page passes `VocabGameItem[]` down) and Task 5 (`ListenTapGame` uses both functions).
+- Produces: `VocabGameItem` interface (`{ id: string; slug: string; audioUrl: string; imageUrl: string; homophoneGroup: string | null }`), `buildRounds(items: VocabGameItem[], maxRoundSize?: number): VocabGameItem[][]`, `createSeededRandom(seed: string): () => number`, `shuffleItems<T>(items: T[], random?: () => number): T[]`, `pickDistractors(pool: VocabGameItem[], target: VocabGameItem, count: number, random?: () => number): VocabGameItem[]` from `@/lib/game/round` — consumed by Task 4 (level game page passes `VocabGameItem[]` down) and Task 5 (`ListenTapGame` uses all three functions to shuffle deterministically across server/client renders).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -481,7 +481,7 @@ Create `src/lib/game/round.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest'
-import { buildRounds, pickDistractors, type VocabGameItem } from './round'
+import { buildRounds, pickDistractors, createSeededRandom, shuffleItems, type VocabGameItem } from './round'
 
 function makeItem(overrides: Partial<VocabGameItem> & { id: string }): VocabGameItem {
   return {
@@ -549,6 +549,58 @@ describe('pickDistractors', () => {
     expect(distractors.length).toBe(2)
   })
 })
+
+describe('createSeededRandom', () => {
+  it('produces the same sequence for the same seed', () => {
+    const sequenceA = [createSeededRandom('hello'), createSeededRandom('hello')].map((rand) => [
+      rand(),
+      rand(),
+      rand(),
+    ])
+    expect(sequenceA[0]).toEqual(sequenceA[1])
+  })
+
+  it('produces different sequences for different seeds', () => {
+    const randomA = createSeededRandom('hello')
+    const randomB = createSeededRandom('goodbye')
+    expect(randomA()).not.toBe(randomB())
+  })
+
+  it('produces values in the [0, 1) range', () => {
+    const random = createSeededRandom('hello')
+    for (let i = 0; i < 20; i++) {
+      const value = random()
+      expect(value).toBeGreaterThanOrEqual(0)
+      expect(value).toBeLessThan(1)
+    }
+  })
+})
+
+describe('shuffleItems', () => {
+  it('produces the same order for two independent seeded generators with the same seed', () => {
+    const items = ['a', 'b', 'c', 'd', 'e']
+    const resultA = shuffleItems(items, createSeededRandom('hello'))
+    const resultB = shuffleItems(items, createSeededRandom('hello'))
+    expect(resultA).toEqual(resultB)
+  })
+
+  it('contains exactly the same elements as the input', () => {
+    const items = ['a', 'b', 'c']
+    const shuffled = shuffleItems(items, createSeededRandom('hello'))
+    expect([...shuffled].sort()).toEqual([...items].sort())
+  })
+
+  it('makes exactly items.length - 1 calls to random', () => {
+    const items = ['a', 'b', 'c', 'd']
+    let calls = 0
+    const random = () => {
+      calls += 1
+      return 0.5
+    }
+    shuffleItems(items, random)
+    expect(calls).toBe(items.length - 1)
+  })
+})
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -582,6 +634,39 @@ export function buildRounds(items: VocabGameItem[], maxRoundSize = 4): VocabGame
   return rounds
 }
 
+// A deterministic pseudo-random generator seeded by a string, so the same
+// seed always produces the same sequence. `ListenTapGame` (Task 5) seeds
+// this with the current question's item id: it's a server-rendered Client
+// Component, so its render runs once on the server and again during client
+// hydration — a true Math.random() call in that render would produce
+// different results on each pass, causing a hydration mismatch where the
+// displayed choices don't match which item each button's click handler is
+// actually bound to.
+export function createSeededRandom(seed: string): () => number {
+  let state = 0
+  for (let i = 0; i < seed.length; i++) {
+    state = (state * 31 + seed.charCodeAt(i)) >>> 0
+  }
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0
+    return state / 0xffffffff
+  }
+}
+
+// Fisher-Yates: makes exactly items.length - 1 calls to `random`, in a fixed
+// order, regardless of JS engine — unlike `.sort(() => random() - 0.5)`,
+// whose comparator call count/order is engine-defined and can differ
+// between Node (server) and a browser (client), breaking determinism even
+// with a seeded `random`.
+export function shuffleItems<T>(items: T[], random: () => number = Math.random): T[] {
+  const result = [...items]
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1))
+    ;[result[i], result[j]] = [result[j], result[i]]
+  }
+  return result
+}
+
 export function pickDistractors(
   pool: VocabGameItem[],
   target: VocabGameItem,
@@ -592,8 +677,7 @@ export function pickDistractors(
     (item) => item.id !== target.id && !(target.homophoneGroup && item.homophoneGroup === target.homophoneGroup)
   )
 
-  const shuffled = [...candidates].sort(() => random() - 0.5)
-  return shuffled.slice(0, count)
+  return shuffleItems(candidates, random).slice(0, count)
 }
 ```
 
@@ -993,6 +1077,28 @@ describe('ListenTapGame', () => {
     expect(screen.getByText('You earned 3 stars.')).toBeInTheDocument()
   })
 
+  it('ignores a duplicate click on the last answer while progress is saving', async () => {
+    let resolveFetch: (() => void) | undefined
+    global.fetch = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = () => resolve({ ok: true, json: async () => ({ ok: true }) } as Response)
+        })
+    )
+
+    const items = [makeItem('a')]
+    render(<ListenTapGame levelId={1} levelName="Greetings" vocabItems={items} />)
+
+    fireEvent.click(screen.getByTestId('a'))
+    fireEvent.click(screen.getByTestId('a'))
+
+    resolveFetch?.()
+
+    await waitFor(() => expect(screen.getByText('Level complete!')).toBeInTheDocument())
+    expect(screen.getByText('You earned 3 stars.')).toBeInTheDocument()
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+  })
+
   it('awards 1 star after a retry and sums correctly across items', async () => {
     const items = [makeItem('a'), makeItem('b')]
     render(<ListenTapGame levelId={1} levelName="Greetings" vocabItems={items} />)
@@ -1049,17 +1155,16 @@ Expected: FAIL — `./listen-tap-game` does not exist.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { buildRounds, pickDistractors, type VocabGameItem } from '@/lib/game/round'
+import {
+  buildRounds,
+  pickDistractors,
+  createSeededRandom,
+  shuffleItems,
+  type VocabGameItem,
+} from '@/lib/game/round'
 
 const STARS_FIRST_TRY = 3
 const STARS_AFTER_RETRY = 1
-
-// A plain module-level function, not an inline call in the component body —
-// React 19's react-hooks/purity lint rule flags Math.random() called
-// directly during render, but not inside an ordinary function it calls.
-function shuffleChoices(items: VocabGameItem[]): VocabGameItem[] {
-  return [...items].sort(() => Math.random() - 0.5)
-}
 
 interface ListenTapGameProps {
   levelId: number
@@ -1085,10 +1190,18 @@ export function ListenTapGame({ levelId, levelName, vocabItems }: ListenTapGameP
   // React 19's react-hooks/set-state-in-effect rule flags setState calls
   // made synchronously inside an Effect body when the value could instead
   // be computed directly from props/state during render.
+  //
+  // The shuffle itself is seeded by the item id (not Math.random directly):
+  // this component is server-rendered then hydrated on the client, and a
+  // true random call in render would produce different results on the
+  // server pass vs. the client pass, causing a hydration mismatch where
+  // the displayed choices don't match which item each button's click
+  // handler is actually bound to.
   const choices = useMemo(() => {
     if (!currentItem) return []
-    const distractors = pickDistractors(vocabItems, currentItem, 2)
-    return shuffleChoices([currentItem, ...distractors])
+    const random = createSeededRandom(currentItem.id)
+    const distractors = pickDistractors(vocabItems, currentItem, 2, random)
+    return shuffleItems([currentItem, ...distractors], random)
   }, [currentItem, vocabItems])
 
   // Reset the "missed" flag whenever the question changes, following React's
@@ -1114,7 +1227,13 @@ export function ListenTapGame({ levelId, levelName, vocabItems }: ListenTapGameP
   }
 
   function handleChoice(choice: VocabGameItem) {
-    if (!currentItem) return
+    // The phase check blocks a duplicate tap on the last question while
+    // /api/progress is still saving — without it, currentItem is still
+    // defined (indices haven't advanced), so a second tap on the correct
+    // answer would re-run this whole function and add its stars a second
+    // time. Found via manual browser testing: a level's stars were
+    // over-counted when the correct answer was tapped twice in a row.
+    if (!currentItem || phase !== 'playing') return
 
     if (choice.id !== currentItem.id) {
       setHasMissed(true)
@@ -1166,7 +1285,12 @@ export function ListenTapGame({ levelId, levelName, vocabItems }: ListenTapGameP
       <button onClick={() => audioRef.current?.play().catch(() => {})}>Play again</button>
       <div>
         {choices.map((choice) => (
-          <button key={choice.id} data-testid={choice.id} onClick={() => handleChoice(choice)}>
+          <button
+            key={choice.id}
+            data-testid={choice.id}
+            disabled={phase !== 'playing'}
+            onClick={() => handleChoice(choice)}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element -- small externally-hosted SVG icons, not a Next/Image optimization candidate */}
             <img src={choice.imageUrl} alt="" width={120} height={120} />
           </button>
@@ -1188,7 +1312,11 @@ Expected: PASS
 Run: `npm test && npm run lint`
 Expected: all tests pass, no lint errors (this also confirms Task 4's page test now exercises the real `ListenTapGame` import chain correctly, since the mock in that test file replaces this module).
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Manually verify in a real browser**
+
+React Testing Library's `render()` mounts the component directly on the client — it never runs a real server-render-then-hydrate cycle, so it cannot catch a hydration mismatch (server and client computing different output for the same render). This class of bug only shows up when the page is actually served. Run `npm run dev`, log in, and play through `/play/1` in a real browser tab. Open the browser console and confirm there is no "A tree hydrated but some attributes of the server rendered HTML didn't match" error, and confirm tapping the picture matching the audio actually advances the question (not just that *some* click advances it).
+
+- [ ] **Step 7: Commit**
 
 ```bash
 git add "src/app/play/[levelId]/listen-tap-game.tsx" "src/app/play/[levelId]/listen-tap-game.test.tsx"
