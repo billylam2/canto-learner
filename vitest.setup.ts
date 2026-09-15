@@ -1,4 +1,10 @@
 import '@testing-library/jest-dom/vitest'
+import { afterEach } from 'vitest'
+import { cleanup } from '@testing-library/react'
+
+afterEach(() => {
+  cleanup()
+})
 
 // Vitest's module runner evaluates each test file in its own vm context, so
 // ArrayBuffers returned by Node's native crypto.subtle (created against a
