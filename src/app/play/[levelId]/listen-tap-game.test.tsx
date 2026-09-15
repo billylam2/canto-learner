@@ -55,6 +55,28 @@ describe('ListenTapGame', () => {
     expect(screen.getByText('You earned 3 stars.')).toBeInTheDocument()
   })
 
+  it('ignores a duplicate click on the last answer while progress is saving', async () => {
+    let resolveFetch: (() => void) | undefined
+    global.fetch = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = () => resolve({ ok: true, json: async () => ({ ok: true }) } as Response)
+        })
+    )
+
+    const items = [makeItem('a')]
+    render(<ListenTapGame levelId={1} levelName="Greetings" vocabItems={items} />)
+
+    fireEvent.click(screen.getByTestId('a'))
+    fireEvent.click(screen.getByTestId('a'))
+
+    resolveFetch?.()
+
+    await waitFor(() => expect(screen.getByText('Level complete!')).toBeInTheDocument())
+    expect(screen.getByText('You earned 3 stars.')).toBeInTheDocument()
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+  })
+
   it('awards 1 star after a retry and sums correctly across items', async () => {
     const items = [makeItem('a'), makeItem('b')]
     render(<ListenTapGame levelId={1} levelName="Greetings" vocabItems={items} />)

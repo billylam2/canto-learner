@@ -60,7 +60,7 @@ export function ListenTapGame({ levelId, levelName, vocabItems }: ListenTapGameP
   }
 
   function handleChoice(choice: VocabGameItem) {
-    if (!currentItem) return
+    if (!currentItem || phase !== 'playing') return
 
     if (choice.id !== currentItem.id) {
       setHasMissed(true)
@@ -112,7 +112,12 @@ export function ListenTapGame({ levelId, levelName, vocabItems }: ListenTapGameP
       <button onClick={() => audioRef.current?.play().catch(() => {})}>Play again</button>
       <div>
         {choices.map((choice) => (
-          <button key={choice.id} data-testid={choice.id} onClick={() => handleChoice(choice)}>
+          <button
+            key={choice.id}
+            data-testid={choice.id}
+            disabled={phase !== 'playing'}
+            onClick={() => handleChoice(choice)}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element -- small externally-hosted SVG icons, not a Next/Image optimization candidate */}
             <img src={choice.imageUrl} alt="" width={120} height={120} />
           </button>
