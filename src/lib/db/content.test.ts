@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { upsertLevel, upsertVocabItem, linkVocabToLevel } from './content'
+import { upsertLevel, upsertVocabItem, linkVocabToLevel, getVocabItemsForLevel } from './content'
 
 function makeSupabaseMock(overrides: {
   upsertResult?: { error: unknown }
@@ -76,6 +76,70 @@ describe('linkVocabToLevel', () => {
     const supabase = makeSupabaseMock({ upsertResult: { error: { message: 'boom' } } })
     await expect(linkVocabToLevel(supabase, 1, 'v1')).rejects.toThrow(
       'Failed to link vocab item v1 to level 1: boom'
+    )
+  })
+})
+
+function makeLevelVocabMock(overrides: {
+  linksResult?: { data: unknown; error: unknown }
+  itemsResult?: { data: unknown; error: unknown }
+}) {
+  const eq = vi.fn().mockResolvedValue(overrides.linksResult ?? { data: [], error: null })
+  const levelVocabSelect = vi.fn().mockReturnValue({ eq })
+
+  const order = vi.fn().mockResolvedValue(overrides.itemsResult ?? { data: [], error: null })
+  const inFn = vi.fn().mockReturnValue({ order })
+  const vocabItemsSelect = vi.fn().mockReturnValue({ in: inFn })
+
+  const from = vi.fn((table: string) => {
+    if (table === 'level_vocab') return { select: levelVocabSelect }
+    if (table === 'vocab_items') return { select: vocabItemsSelect }
+    throw new Error(`Unexpected table: ${table}`)
+  })
+
+  return { from } as unknown as SupabaseClient
+}
+
+describe('getVocabItemsForLevel', () => {
+  it('returns vocab items mapped to camelCase, in database order', async () => {
+    const supabase = makeLevelVocabMock({
+      linksResult: { data: [{ vocab_item_id: 'v1' }, { vocab_item_id: 'v2' }], error: null },
+      itemsResult: {
+        data: [
+          { id: 'v1', slug: 'hello', audio_url: 'a1', image_url: 'i1', homophone_group: null },
+          { id: 'v2', slug: 'goodbye', audio_url: 'a2', image_url: 'i2', homophone_group: null },
+        ],
+        error: null,
+      },
+    })
+
+    const result = await getVocabItemsForLevel(supabase, 1)
+    expect(result).toEqual([
+      { id: 'v1', slug: 'hello', audioUrl: 'a1', imageUrl: 'i1', homophoneGroup: null },
+      { id: 'v2', slug: 'goodbye', audioUrl: 'a2', imageUrl: 'i2', homophoneGroup: null },
+    ])
+  })
+
+  it('returns an empty array when the level has no vocab', async () => {
+    const supabase = makeLevelVocabMock({ linksResult: { data: [], error: null } })
+    const result = await getVocabItemsForLevel(supabase, 999)
+    expect(result).toEqual([])
+  })
+
+  it('throws when the level_vocab query errors', async () => {
+    const supabase = makeLevelVocabMock({ linksResult: { data: null, error: { message: 'boom' } } })
+    await expect(getVocabItemsForLevel(supabase, 1)).rejects.toThrow(
+      'Failed to fetch level_vocab for level 1: boom'
+    )
+  })
+
+  it('throws when the vocab_items query errors', async () => {
+    const supabase = makeLevelVocabMock({
+      linksResult: { data: [{ vocab_item_id: 'v1' }], error: null },
+      itemsResult: { data: null, error: { message: 'boom' } },
+    })
+    await expect(getVocabItemsForLevel(supabase, 1)).rejects.toThrow(
+      'Failed to fetch vocab items for level 1: boom'
     )
   })
 })
