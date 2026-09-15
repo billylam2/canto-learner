@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildRounds, pickDistractors, type VocabGameItem } from './round'
+import { buildRounds, pickDistractors, createSeededRandom, shuffleItems, type VocabGameItem } from './round'
 
 function makeItem(overrides: Partial<VocabGameItem> & { id: string }): VocabGameItem {
   return {
@@ -65,5 +65,57 @@ describe('pickDistractors', () => {
     const target = pool[2]
     const distractors = pickDistractors(pool, target, 2)
     expect(distractors.length).toBe(2)
+  })
+})
+
+describe('createSeededRandom', () => {
+  it('produces the same sequence for the same seed', () => {
+    const sequenceA = [createSeededRandom('hello'), createSeededRandom('hello')].map((rand) => [
+      rand(),
+      rand(),
+      rand(),
+    ])
+    expect(sequenceA[0]).toEqual(sequenceA[1])
+  })
+
+  it('produces different sequences for different seeds', () => {
+    const randomA = createSeededRandom('hello')
+    const randomB = createSeededRandom('goodbye')
+    expect(randomA()).not.toBe(randomB())
+  })
+
+  it('produces values in the [0, 1) range', () => {
+    const random = createSeededRandom('hello')
+    for (let i = 0; i < 20; i++) {
+      const value = random()
+      expect(value).toBeGreaterThanOrEqual(0)
+      expect(value).toBeLessThan(1)
+    }
+  })
+})
+
+describe('shuffleItems', () => {
+  it('produces the same order for two independent seeded generators with the same seed', () => {
+    const items = ['a', 'b', 'c', 'd', 'e']
+    const resultA = shuffleItems(items, createSeededRandom('hello'))
+    const resultB = shuffleItems(items, createSeededRandom('hello'))
+    expect(resultA).toEqual(resultB)
+  })
+
+  it('contains exactly the same elements as the input', () => {
+    const items = ['a', 'b', 'c']
+    const shuffled = shuffleItems(items, createSeededRandom('hello'))
+    expect([...shuffled].sort()).toEqual([...items].sort())
+  })
+
+  it('makes exactly items.length - 1 calls to random', () => {
+    const items = ['a', 'b', 'c', 'd']
+    let calls = 0
+    const random = () => {
+      calls += 1
+      return 0.5
+    }
+    shuffleItems(items, random)
+    expect(calls).toBe(items.length - 1)
   })
 })

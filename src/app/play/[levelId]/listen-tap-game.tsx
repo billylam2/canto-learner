@@ -2,14 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { buildRounds, pickDistractors, type VocabGameItem } from '@/lib/game/round'
+import {
+  buildRounds,
+  pickDistractors,
+  createSeededRandom,
+  shuffleItems,
+  type VocabGameItem,
+} from '@/lib/game/round'
 
 const STARS_FIRST_TRY = 3
 const STARS_AFTER_RETRY = 1
-
-function shuffleChoices(items: VocabGameItem[]): VocabGameItem[] {
-  return [...items].sort(() => Math.random() - 0.5)
-}
 
 interface ListenTapGameProps {
   levelId: number
@@ -33,8 +35,14 @@ export function ListenTapGame({ levelId, levelName, vocabItems }: ListenTapGameP
 
   const choices = useMemo(() => {
     if (!currentItem) return []
-    const distractors = pickDistractors(vocabItems, currentItem, 2)
-    return shuffleChoices([currentItem, ...distractors])
+    // Seeded by the item id so the server-rendered HTML and the client's
+    // hydration render compute the identical order — a true Math.random()
+    // here would pick different distractors/order on each pass and cause a
+    // hydration mismatch between what's displayed and what each button's
+    // click handler is actually bound to.
+    const random = createSeededRandom(currentItem.id)
+    const distractors = pickDistractors(vocabItems, currentItem, 2, random)
+    return shuffleItems([currentItem, ...distractors], random)
   }, [currentItem, vocabItems])
 
   // Reset the "missed" flag whenever the question changes, following React's
