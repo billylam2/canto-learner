@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
-    "sync-content": "tsx scripts/sync-content.ts"
+    "sync-content": "tsx --env-file=.env.local scripts/sync-content.ts"
   },
   "dependencies": {
     "@google-cloud/text-to-speech": "^7.1.0",
