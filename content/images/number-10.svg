@@ -1,0 +1,14 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" rx="24" fill="#DDD6FE"/>
+  <text x="100" y="100" font-family="Arial, sans-serif" font-size="66" font-weight="700" fill="#4C1D95" text-anchor="middle">10</text>
+  <circle cx="64" cy="150" r="6" fill="#4C1D95"/>
+  <circle cx="82" cy="150" r="6" fill="#4C1D95"/>
+  <circle cx="100" cy="150" r="6" fill="#4C1D95"/>
+  <circle cx="118" cy="150" r="6" fill="#4C1D95"/>
+  <circle cx="136" cy="150" r="6" fill="#4C1D95"/>
+  <circle cx="64" cy="170" r="6" fill="#4C1D95"/>
+  <circle cx="82" cy="170" r="6" fill="#4C1D95"/>
+  <circle cx="100" cy="170" r="6" fill="#4C1D95"/>
+  <circle cx="118" cy="170" r="6" fill="#4C1D95"/>
+  <circle cx="136" cy="170" r="6" fill="#4C1D95"/>
+</svg>

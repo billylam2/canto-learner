@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { existsSync } from 'node:fs'
+import path from 'node:path'
 import { LEVELS, VOCAB_ITEMS } from './vocab'
 
 describe('vocab content', () => {
@@ -35,5 +37,14 @@ describe('vocab content', () => {
 
   it('has 4 levels in ascending order', () => {
     expect(LEVELS.map((level) => level.order)).toEqual([1, 2, 3, 4])
+  })
+})
+
+describe('vocab images', () => {
+  it('has a matching SVG image file for every item', () => {
+    for (const item of VOCAB_ITEMS) {
+      const imagePath = path.resolve(import.meta.dirname, 'images', `${item.slug}.svg`)
+      expect(existsSync(imagePath)).toBe(true)
+    }
   })
 })
