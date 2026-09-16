@@ -14,7 +14,8 @@
     "sync-content": "tsx --env-file=.env.local scripts/sync-content.ts",
     "generate-images": "tsx --env-file=.env.local scripts/generate-images.ts",
     "generate-scenes": "tsx --env-file=.env.local scripts/generate-scenes.ts",
-    "render-scene-debug": "tsx scripts/render-scene-debug.ts"
+    "render-scene-debug": "tsx scripts/render-scene-debug.ts",
+    "sync-scenes": "tsx --env-file=.env.local scripts/sync-scenes.ts"
   },
   "dependencies": {
     "@google-cloud/text-to-speech": "^7.1.0",
