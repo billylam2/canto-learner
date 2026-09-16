@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 
 const MODEL = 'gemini-2.5-flash-image'
 const REGION = 'us-central1'
-const STYLE_SUFFIX =
+export const DEFAULT_STYLE_SUFFIX =
   'cute flat cartoon illustration, thick black outlines, solid bright colors, simple white background, no text, centered'
 
 export interface ImageGenDeps {
@@ -28,9 +28,14 @@ interface GenerateContentResponse {
   }>
 }
 
-export async function generateImage(projectId: string, description: string, deps: ImageGenDeps): Promise<Buffer> {
+export async function generateImage(
+  projectId: string,
+  description: string,
+  deps: ImageGenDeps,
+  styleSuffix: string = DEFAULT_STYLE_SUFFIX
+): Promise<Buffer> {
   const accessToken = deps.getAccessToken()
-  const prompt = `${description}, ${STYLE_SUFFIX}`
+  const prompt = `${description}, ${styleSuffix}`
   const url = `https://${REGION}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${REGION}/publishers/google/models/${MODEL}:generateContent`
 
   const response = await deps.fetchImpl(url, {

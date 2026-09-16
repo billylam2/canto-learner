@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { generateImage, type ImageGenDeps } from './image-gen'
+import { generateImage, DEFAULT_STYLE_SUFFIX, type ImageGenDeps } from './image-gen'
 
 function makeDeps(overrides: { status?: number; body?: unknown; text?: string }): ImageGenDeps {
   const fetchImpl = vi.fn().mockResolvedValue({
@@ -64,5 +64,22 @@ describe('generateImage', () => {
   it('throws when no image is returned', async () => {
     const deps = makeDeps({ body: { candidates: [{ content: { parts: [{ text: 'no image sorry' }] } }] } })
     await expect(generateImage('proj-1', 'a cute cat', deps)).rejects.toThrow('No image returned')
+  })
+
+  it('uses a custom style suffix when one is provided, instead of the default', async () => {
+    const deps = makeDeps({
+      body: { candidates: [{ content: { parts: [{ inlineData: { data: Buffer.from('x').toString('base64') } }] } }] },
+    })
+    await generateImage('proj-1', 'a big dog and small cat', deps, 'flat cartoon style, no text')
+    const call = vi.mocked(deps.fetchImpl).mock.calls[0]
+    const body = JSON.parse((call[1] as RequestInit).body as string)
+    const prompt = body.contents[0].parts[0].text as string
+    expect(prompt).toContain('a big dog and small cat')
+    expect(prompt).toContain('flat cartoon style, no text')
+    expect(prompt).not.toContain('simple white background')
+  })
+
+  it('exports the default style suffix used by vocab-icon generation', () => {
+    expect(DEFAULT_STYLE_SUFFIX).toContain('simple white background')
   })
 })

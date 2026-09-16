@@ -1,8 +1,8 @@
 import sharp from 'sharp'
 
-export async function resizeImage(buffer: Buffer, size = 512): Promise<Buffer> {
+export async function resizeImage(buffer: Buffer, width = 512, height = width): Promise<Buffer> {
   return sharp(buffer)
-    .resize(size, size, { fit: 'cover' })
+    .resize(width, height, { fit: 'cover' })
     .png({ compressionLevel: 9 })
     .toBuffer()
 }
