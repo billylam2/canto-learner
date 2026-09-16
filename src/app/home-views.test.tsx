@@ -11,8 +11,9 @@ vi.mock('next/navigation', () => ({
 import { GuestHome, AuthenticatedHome } from './home-views'
 
 describe('GuestHome', () => {
-  it('shows links to signup and login', () => {
+  it('shows a prominent guest-play action alongside signup and login links', () => {
     render(<GuestHome />)
+    expect(screen.getByRole('link', { name: 'Play as guest' })).toHaveAttribute('href', '/play')
     expect(screen.getByText('Create an account')).toBeInTheDocument()
     expect(screen.getByText('Log in')).toBeInTheDocument()
   })
