@@ -19,9 +19,9 @@ async function main() {
     const audioBuffer = await synthesizeCantonese(tts, item.cantonese)
     const audioUrl = await uploadAsset(supabase, 'vocab-audio', `${item.slug}.mp3`, audioBuffer, 'audio/mpeg')
 
-    const imagePath = path.join(process.cwd(), 'content', 'images', `${item.slug}.svg`)
+    const imagePath = path.join(process.cwd(), 'content', 'images', `${item.slug}.png`)
     const imageBuffer = readFileSync(imagePath)
-    const imageUrl = await uploadAsset(supabase, 'vocab-images', `${item.slug}.svg`, imageBuffer, 'image/svg+xml')
+    const imageUrl = await uploadAsset(supabase, 'vocab-images', `${item.slug}.png`, imageBuffer, 'image/png')
 
     const vocabItem = await upsertVocabItem(supabase, {
       slug: item.slug,
