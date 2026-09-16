@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { existsSync } from 'node:fs'
+import path from 'node:path'
 import { LEVELS, VOCAB_ITEMS } from './vocab'
 import { SCENES, SCENE_OBJECTS } from './scenes'
 
@@ -41,6 +43,61 @@ describe('scene content', () => {
     for (const object of SCENE_OBJECTS) {
       expect(sceneSlugs.has(object.sceneSlug)).toBe(true)
       expect(vocabSlugs.has(object.vocabSlug)).toBe(true)
+    }
+  })
+})
+
+describe('scene content coverage', () => {
+  it('covers exactly dog, cat, big, and small for the dog-cat scene', () => {
+    const slugs = SCENE_OBJECTS.filter((object) => object.sceneSlug === 'scene-dog-cat').map((object) => object.vocabSlug)
+    expect(new Set(slugs)).toEqual(new Set(['dog', 'cat', 'big', 'small']))
+  })
+
+  it('covers exactly the 8 color words for the balloons scene', () => {
+    const slugs = SCENE_OBJECTS.filter((object) => object.sceneSlug === 'scene-colors-balloons').map(
+      (object) => object.vocabSlug
+    )
+    expect(new Set(slugs)).toEqual(
+      new Set([
+        'color-red',
+        'color-orange',
+        'color-yellow',
+        'color-green',
+        'color-blue',
+        'color-purple',
+        'color-black',
+        'color-white',
+      ])
+    )
+  })
+
+  it('covers exactly the 7 findable people/family words across level 2 scenes, excluding pronouns', () => {
+    const level2SceneSlugs = new Set(SCENES.filter((scene) => scene.levelId === 2).map((scene) => scene.slug))
+    const slugs = SCENE_OBJECTS.filter((object) => level2SceneSlugs.has(object.sceneSlug)).map(
+      (object) => object.vocabSlug
+    )
+    expect(new Set(slugs)).toEqual(
+      new Set(['teacher', 'mom', 'dad', 'older-brother', 'younger-brother', 'older-sister', 'younger-sister'])
+    )
+    expect(slugs).not.toContain('i-me')
+    expect(slugs).not.toContain('you')
+  })
+
+  it('keeps every hotspot rectangle within the 0-100 percent image bounds', () => {
+    for (const object of SCENE_OBJECTS) {
+      expect(object.xPercent).toBeGreaterThanOrEqual(0)
+      expect(object.yPercent).toBeGreaterThanOrEqual(0)
+      expect(object.xPercent + object.widthPercent).toBeLessThanOrEqual(100)
+      expect(object.yPercent + object.heightPercent).toBeLessThanOrEqual(100)
+    }
+  })
+})
+
+describe('scene images', () => {
+  it('has a matching PNG image file for every scene', () => {
+    for (const scene of SCENES) {
+      const imagePath = path.resolve(import.meta.dirname, 'images', 'scenes', `${scene.slug}.png`)
+      expect(existsSync(imagePath)).toBe(true)
     }
   })
 })
