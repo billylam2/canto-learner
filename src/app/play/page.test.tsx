@@ -41,7 +41,9 @@ describe('PlayPage', () => {
 
     render(await PlayPage())
 
-    expect(screen.getByText(/Greetings — 10 stars/)).toBeInTheDocument()
+    const greetingsItem = screen.getByText(/Greetings/).closest('li')
+    expect(greetingsItem).not.toBeNull()
+    expect(within(greetingsItem as HTMLElement).getByText('10 stars')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Listen & Tap' })).toHaveAttribute('href', '/play/1')
     expect(screen.getByText(/People & Family — locked/)).toBeInTheDocument()
   })
@@ -58,7 +60,7 @@ describe('PlayPage', () => {
 
     // Level 1 (Greetings) has no scene content, so its list item gets no
     // scene link even though it (and every other level) is unlocked.
-    const greetingsItem = screen.getByText(/Greetings — 200 stars/).closest('li')
+    const greetingsItem = screen.getByText(/Greetings/).closest('li')
     expect(greetingsItem).not.toBeNull()
     expect(within(greetingsItem as HTMLElement).queryByRole('link', { name: 'Find in the Scene' })).not.toBeInTheDocument()
   })
