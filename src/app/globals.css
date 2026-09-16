@@ -1,0 +1,15 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-brand-primary: #FF5A5F;
+  --color-brand-secondary: #4DABF7;
+  --color-brand-star: #FFC93C;
+  --color-brand-success: #51CF66;
+  --color-brand-bg: #FFF8E7;
+  --color-brand-ink: #1A1A1A;
+  --font-sans: var(--font-baloo), sans-serif;
+}
+
+body {
+  background-color: var(--color-brand-bg);
+}
