@@ -131,4 +131,22 @@ describe('SceneGame', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back to levels' }))
     expect(pushMock).toHaveBeenCalledWith('/play')
   })
+
+  it('calls onLevelComplete instead of the API when provided', async () => {
+    const onLevelComplete = vi.fn()
+    const scenes = [makeScene(1, [DOG])]
+    render(
+      <SceneGame
+        levelId={3}
+        levelName="Descriptors & Animals"
+        scenes={scenes}
+        onLevelComplete={onLevelComplete}
+      />
+    )
+
+    fireEvent.click(screen.getByTestId('scene-image'), { clientX: 30, clientY: 30 })
+
+    await waitFor(() => expect(onLevelComplete).toHaveBeenCalledWith(3))
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
 })

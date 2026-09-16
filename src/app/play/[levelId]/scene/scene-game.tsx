@@ -15,6 +15,7 @@ interface SceneGameProps {
   levelId: number
   levelName: string
   scenes: SceneGameData[]
+  onLevelComplete?: (starsEarned: number) => Promise<void> | void
 }
 
 interface Question {
@@ -22,7 +23,7 @@ interface Question {
   objectIndex: number
 }
 
-export function SceneGame({ levelId, levelName, scenes }: SceneGameProps) {
+export function SceneGame({ levelId, levelName, scenes, onLevelComplete }: SceneGameProps) {
   const router = useRouter()
 
   // Fixed insertion order across scenes and their objects — no
@@ -61,11 +62,15 @@ export function SceneGame({ levelId, levelName, scenes }: SceneGameProps) {
 
   async function finishLevel(finalStars: number) {
     setPhase('saving')
-    await fetch('/api/progress', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ levelId, starsEarned: finalStars, gameType: 'find-scene' }),
-    })
+    if (onLevelComplete) {
+      await onLevelComplete(finalStars)
+    } else {
+      await fetch('/api/progress', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ levelId, starsEarned: finalStars, gameType: 'find-scene' }),
+      })
+    }
     setPhase('summary')
   }
 

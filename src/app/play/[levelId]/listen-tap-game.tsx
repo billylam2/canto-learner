@@ -20,9 +20,10 @@ interface ListenTapGameProps {
   levelId: number
   levelName: string
   vocabItems: VocabGameItem[]
+  onLevelComplete?: (starsEarned: number) => Promise<void> | void
 }
 
-export function ListenTapGame({ levelId, levelName, vocabItems }: ListenTapGameProps) {
+export function ListenTapGame({ levelId, levelName, vocabItems, onLevelComplete }: ListenTapGameProps) {
   const router = useRouter()
   const rounds = useMemo(() => buildRounds(vocabItems), [vocabItems])
 
@@ -62,11 +63,15 @@ export function ListenTapGame({ levelId, levelName, vocabItems }: ListenTapGameP
 
   async function finishLevel(finalStars: number) {
     setPhase('saving')
-    await fetch('/api/progress', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ levelId, starsEarned: finalStars, gameType: 'listen-tap' }),
-    })
+    if (onLevelComplete) {
+      await onLevelComplete(finalStars)
+    } else {
+      await fetch('/api/progress', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ levelId, starsEarned: finalStars, gameType: 'listen-tap' }),
+      })
+    }
     setPhase('summary')
   }
 

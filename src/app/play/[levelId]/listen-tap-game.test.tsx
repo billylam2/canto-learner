@@ -118,4 +118,17 @@ describe('ListenTapGame', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back to levels' }))
     expect(pushMock).toHaveBeenCalledWith('/play')
   })
+
+  it('calls onLevelComplete instead of the API when provided', async () => {
+    const onLevelComplete = vi.fn()
+    const items = [makeItem('a')]
+    render(
+      <ListenTapGame levelId={1} levelName="Greetings" vocabItems={items} onLevelComplete={onLevelComplete} />
+    )
+
+    fireEvent.click(screen.getByTestId('a'))
+
+    await waitFor(() => expect(onLevelComplete).toHaveBeenCalledWith(3))
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
 })
