@@ -23,7 +23,7 @@ export const LEVELS: LevelSource[] = [
   { id: 2, name: 'People & Family', order: 2, unlockThreshold: 20 },
   { id: 3, name: 'Descriptors & Animals', order: 3, unlockThreshold: 40 },
   { id: 4, name: 'Numbers', order: 4, unlockThreshold: 60 },
-  { id: 5, name: 'Colors', order: 5, unlockThreshold: 90 },
+  { id: 5, name: 'Colors', order: 5, unlockThreshold: 80 },
 ]
 
 export const VOCAB_ITEMS: VocabSourceItem[] = [
@@ -32,7 +32,7 @@ export const VOCAB_ITEMS: VocabSourceItem[] = [
   { slug: 'hello-everyone', category: 'greetings', level: 1, cantonese: '大家好', jyutping: 'daai6 gaa1 hou2', englishGloss: 'hello everyone', description: 'three cartoon friends waving hello together' },
   { slug: 'good-morning', category: 'greetings', level: 1, cantonese: '早晨', jyutping: 'zou2 san4', englishGloss: 'good morning', description: 'a bright cartoon sun rising over hills' },
   { slug: 'good-evening', category: 'greetings', level: 1, cantonese: '晚安', jyutping: 'maan5 on1', englishGloss: 'good evening', description: 'a cartoon crescent moon with stars at night' },
-  { slug: 'goodbye', category: 'greetings', level: 1, cantonese: '拜拜', jyutping: 'baai1 baai3', englishGloss: 'goodbye', description: 'a cartoon hand waving goodbye' },
+  { slug: 'goodbye', category: 'greetings', level: 1, cantonese: '拜拜', jyutping: 'baai1 baai3', englishGloss: 'goodbye', description: 'a cartoon child walking away while waving goodbye over their shoulder, seen from behind' },
   { slug: 'thank-you', category: 'greetings', level: 1, cantonese: '唔該', jyutping: 'm4 goi1', englishGloss: 'thank you', description: 'two cartoon hands pressed together in a thank-you gesture' },
   { slug: 'excuse-me', category: 'greetings', level: 1, cantonese: '唔好意思', jyutping: 'm4 hou2 ji3 si1', englishGloss: 'excuse me', description: 'a cartoon hand raised politely asking for attention' },
   { slug: 'sorry', category: 'greetings', level: 1, cantonese: '對唔住', jyutping: 'deoi3 m4 zyu6', englishGloss: 'sorry', description: 'a cute cartoon face looking sorry with one small tear' },
@@ -59,9 +59,9 @@ export const VOCAB_ITEMS: VocabSourceItem[] = [
   { slug: 'number-5', category: 'numbers', level: 4, cantonese: '五', jyutping: 'ng5', englishGloss: 'five', description: 'the numeral 5 with five small dots below it' },
   { slug: 'number-6', category: 'numbers', level: 4, cantonese: '六', jyutping: 'luk6', englishGloss: 'six', description: 'the numeral 6 with six small dots below it' },
   { slug: 'number-7', category: 'numbers', level: 4, cantonese: '七', jyutping: 'cat1', englishGloss: 'seven', description: 'the numeral 7 with seven small dots below it' },
-  { slug: 'number-8', category: 'numbers', level: 4, cantonese: '八', jyutping: 'baat3', englishGloss: 'eight', description: 'the numeral 8 with eight small dots below it' },
-  { slug: 'number-9', category: 'numbers', level: 4, cantonese: '九', jyutping: 'gau2', englishGloss: 'nine', description: 'the numeral 9 with nine small dots below it', homophoneGroup: 'gau2' },
-  { slug: 'number-10', category: 'numbers', level: 4, cantonese: '十', jyutping: 'sap6', englishGloss: 'ten', description: 'the numeral 10 with ten small dots below it' },
+  { slug: 'number-8', category: 'numbers', level: 4, cantonese: '八', jyutping: 'baat3', englishGloss: 'eight', description: 'the numeral 8 with exactly eight small loose dots below it, no box or frame around the dots' },
+  { slug: 'number-9', category: 'numbers', level: 4, cantonese: '九', jyutping: 'gau2', englishGloss: 'nine', description: 'the numeral 9 with nine small loose dots below it arranged in a 3 by 3 grid: three dots in the top row, three dots in the middle row, three dots in the bottom row, nine dots total, no box or frame around the dots', homophoneGroup: 'gau2' },
+  { slug: 'number-10', category: 'numbers', level: 4, cantonese: '十', jyutping: 'sap6', englishGloss: 'ten', description: 'the numeral 10 with small loose dots below it in two short rows stacked one above the other: the top row has a first, second, third, fourth, and fifth dot; the bottom row has a sixth, seventh, eighth, ninth, and tenth dot; ten dots total and nothing below the second row, no box or frame around the dots' },
   // Level 5: Colors
   { slug: 'color-red', category: 'colors', level: 5, cantonese: '紅色', jyutping: 'hung4 sik1', englishGloss: 'red', description: 'a solid red paint splotch blob shape' },
   { slug: 'color-orange', category: 'colors', level: 5, cantonese: '橙色', jyutping: 'caang2 sik1', englishGloss: 'orange', description: 'a solid orange paint splotch blob shape' },
