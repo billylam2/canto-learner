@@ -9,6 +9,9 @@ import {
   shuffleItems,
   type VocabGameItem,
 } from '@/lib/game/round'
+import { Header } from '@/components/ui/header'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
 const STARS_FIRST_TRY = 3
 const STARS_AFTER_RETRY = 1
@@ -98,11 +101,16 @@ export function ListenTapGame({ levelId, levelName, vocabItems }: ListenTapGameP
 
   if (phase === 'summary') {
     return (
-      <main>
-        <h1>Level complete!</h1>
-        <p>You earned {starsEarned} stars.</p>
-        <button onClick={() => router.push('/play')}>Back to levels</button>
-      </main>
+      <div className="min-h-screen bg-brand-bg">
+        <Header showBackLink />
+        <main className="max-w-md mx-auto p-4">
+          <Card className="flex flex-col items-center gap-4 text-center">
+            <h1 className="text-2xl font-extrabold text-brand-ink">Level complete!</h1>
+            <p className="text-brand-ink font-bold">You earned {starsEarned} stars.</p>
+            <Button onClick={() => router.push('/play')}>Back to levels</Button>
+          </Card>
+        </main>
+      </div>
     )
   }
 
@@ -111,27 +119,39 @@ export function ListenTapGame({ levelId, levelName, vocabItems }: ListenTapGameP
   }
 
   return (
-    <main>
-      <h1>{levelName}</h1>
-      <p>
-        Round {roundIndex + 1} of {rounds.length}
-      </p>
-      <audio ref={audioRef} src={currentItem.audioUrl} data-testid="prompt-audio" />
-      <button onClick={() => audioRef.current?.play().catch(() => {})}>Play again</button>
-      <div>
-        {choices.map((choice) => (
-          <button
-            key={choice.id}
-            data-testid={choice.id}
-            disabled={phase !== 'playing'}
-            onClick={() => handleChoice(choice)}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element -- small externally-hosted SVG icons, not a Next/Image optimization candidate */}
-            <img src={choice.imageUrl} alt="" width={120} height={120} />
-          </button>
-        ))}
-      </div>
-      {hasMissed && <p role="alert">Try again!</p>}
-    </main>
+    <div className="min-h-screen bg-brand-bg">
+      <Header showBackLink />
+      <main className="max-w-md mx-auto p-4">
+        <Card className="flex flex-col items-center gap-4">
+          <h1 className="text-2xl font-extrabold text-brand-ink">{levelName}</h1>
+          <p className="bg-brand-secondary text-white font-bold rounded-full px-4 py-1 inline-block">
+            Round {roundIndex + 1} of {rounds.length}
+          </p>
+          <audio ref={audioRef} src={currentItem.audioUrl} data-testid="prompt-audio" />
+          <Button variant="secondary" onClick={() => audioRef.current?.play().catch(() => {})}>
+            Play again
+          </Button>
+          <div className="grid grid-cols-3 gap-3">
+            {choices.map((choice) => (
+              <button
+                key={choice.id}
+                data-testid={choice.id}
+                disabled={phase !== 'playing'}
+                onClick={() => handleChoice(choice)}
+                className="border-4 border-brand-ink rounded-[16px] bg-white p-2 shadow-[4px_4px_0_0_#1A1A1A] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#1A1A1A] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- small externally-hosted SVG icons, not a Next/Image optimization candidate */}
+                <img src={choice.imageUrl} alt="" width={120} height={120} className="rounded-[10px]" />
+              </button>
+            ))}
+          </div>
+          {hasMissed && (
+            <p role="alert" className="bg-red-100 border-2 border-red-400 text-red-700 rounded-[12px] px-3 py-2">
+              Try again!
+            </p>
+          )}
+        </Card>
+      </main>
+    </div>
   )
 }
