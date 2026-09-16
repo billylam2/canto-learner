@@ -30,19 +30,10 @@ vi.mock('@/lib/db/scenes', () => ({
 vi.mock('./scene-game', () => ({
   SceneGame: ({ levelName }: { levelName: string }) => <div>Playing scene: {levelName}</div>,
 }))
-vi.mock('@/components/guest-level-gate', () => ({
-  GuestLevelGate: ({
-    levelId,
-    gameType,
-    children,
-  }: {
-    levelId: number
-    gameType: string
-    children: (onLevelComplete: (stars: number) => void) => React.ReactNode
-  }) => (
+vi.mock('./guest-scene-game', () => ({
+  GuestSceneGame: ({ levelId, levelName }: { levelId: number; levelName: string }) => (
     <div>
-      Guest gate for level {levelId} ({gameType})
-      {children(() => {})}
+      Guest playing scene: {levelName} (level {levelId})
     </div>
   ),
 }))
@@ -67,13 +58,12 @@ describe('ScenePage', () => {
     expect(notFoundMock).toHaveBeenCalled()
   })
 
-  it('renders the guest-gated scene game when there is no session', async () => {
+  it('renders the guest scene game when there is no session', async () => {
     getMock.mockReturnValue(undefined)
     vi.mocked(getScenesForLevel).mockResolvedValue([{ id: 1, imageUrl: 'https://example.com/s.png', objects: [] }])
 
     render(await ScenePage({ params: makeParams('1') }))
-    expect(screen.getByText('Playing scene: Greetings')).toBeInTheDocument()
-    expect(screen.getByText('Guest gate for level 1 (find-scene)')).toBeInTheDocument()
+    expect(screen.getByText('Guest playing scene: Greetings (level 1)')).toBeInTheDocument()
     expect(redirectMock).not.toHaveBeenCalled()
   })
 

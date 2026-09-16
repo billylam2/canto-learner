@@ -1,20 +1,14 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getGuestProgress, saveGuestLevelProgress } from '@/lib/guest/progress'
+import { getGuestProgress, saveGuestLevelProgress } from './progress'
 import { computeLevelStatus } from '@/lib/game/level-status'
-import { LEVELS } from '../../content/vocab'
+import { LEVELS } from '../../../content/vocab'
 
-interface GuestLevelGateProps {
-  levelId: number
-  gameType: string
-  children: (onLevelComplete: (starsEarned: number) => void) => ReactNode
-}
-
-export function GuestLevelGate({ levelId, gameType, children }: GuestLevelGateProps) {
+export function useGuestLevelGate(levelId: number, gameType: string) {
   const router = useRouter()
-  const [status, setStatus] = useState<'checking' | 'unlocked'>('checking')
+  const [unlocked, setUnlocked] = useState(false)
 
   useEffect(() => {
     const progress = getGuestProgress()
@@ -26,15 +20,18 @@ export function GuestLevelGate({ levelId, gameType, children }: GuestLevelGatePr
       // computed during the initial (server-rendered) render without a
       // hydration mismatch — it genuinely needs to run post-mount.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setStatus('unlocked')
+      setUnlocked(true)
     } else {
       router.push('/play')
     }
   }, [levelId, router])
 
-  if (status !== 'unlocked') {
-    return <p>Loading...</p>
-  }
+  const onLevelComplete = useCallback(
+    (starsEarned: number) => {
+      saveGuestLevelProgress(levelId, starsEarned, gameType)
+    },
+    [levelId, gameType]
+  )
 
-  return <>{children((starsEarned) => saveGuestLevelProgress(levelId, starsEarned, gameType))}</>
+  return { unlocked, onLevelComplete }
 }

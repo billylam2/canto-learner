@@ -30,19 +30,10 @@ vi.mock('@/lib/db/content', () => ({
 vi.mock('./listen-tap-game', () => ({
   ListenTapGame: ({ levelName }: { levelName: string }) => <div>Playing {levelName}</div>,
 }))
-vi.mock('@/components/guest-level-gate', () => ({
-  GuestLevelGate: ({
-    levelId,
-    gameType,
-    children,
-  }: {
-    levelId: number
-    gameType: string
-    children: (onLevelComplete: (stars: number) => void) => React.ReactNode
-  }) => (
+vi.mock('./guest-listen-tap-game', () => ({
+  GuestListenTapGame: ({ levelId, levelName }: { levelId: number; levelName: string }) => (
     <div>
-      Guest gate for level {levelId} ({gameType})
-      {children(() => {})}
+      Guest playing {levelName} (level {levelId})
     </div>
   ),
 }))
@@ -67,13 +58,12 @@ describe('LevelPage', () => {
     expect(notFoundMock).toHaveBeenCalled()
   })
 
-  it('renders the guest-gated game when there is no session', async () => {
+  it('renders the guest game when there is no session', async () => {
     getMock.mockReturnValue(undefined)
     vi.mocked(getVocabItemsForLevel).mockResolvedValue([])
 
     render(await LevelPage({ params: makeParams('1') }))
-    expect(screen.getByText('Playing Greetings')).toBeInTheDocument()
-    expect(screen.getByText('Guest gate for level 1 (listen-tap)')).toBeInTheDocument()
+    expect(screen.getByText('Guest playing Greetings (level 1)')).toBeInTheDocument()
     expect(redirectMock).not.toHaveBeenCalled()
   })
 

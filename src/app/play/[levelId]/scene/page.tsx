@@ -7,7 +7,7 @@ import { getScenesForLevel } from '@/lib/db/scenes'
 import { computeLevelStatus } from '@/lib/game/level-status'
 import { LEVELS } from '../../../../../content/vocab'
 import { SceneGame } from './scene-game'
-import { GuestLevelGate } from '@/components/guest-level-gate'
+import { GuestSceneGame } from './guest-scene-game'
 
 export default async function ScenePage({ params }: { params: Promise<{ levelId: string }> }) {
   const { levelId: levelIdParam } = await params
@@ -27,13 +27,7 @@ export default async function ScenePage({ params }: { params: Promise<{ levelId:
     if (scenes.length === 0) {
       notFound()
     }
-    return (
-      <GuestLevelGate levelId={levelId} gameType="find-scene">
-        {(onLevelComplete) => (
-          <SceneGame levelId={levelId} levelName={level.name} scenes={scenes} onLevelComplete={onLevelComplete} />
-        )}
-      </GuestLevelGate>
-    )
+    return <GuestSceneGame levelId={levelId} levelName={level.name} scenes={scenes} />
   }
 
   const progress = await getProgressForKid(supabase, session.kidId)
