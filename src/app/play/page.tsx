@@ -6,6 +6,9 @@ import { createSupabaseServerClient } from '@/lib/supabase/client'
 import { getProgressForKid } from '@/lib/db/progress'
 import { computeLevelStatus } from '@/lib/game/level-status'
 import { LEVELS } from '../../../content/vocab'
+import { SCENES } from '../../../content/scenes'
+
+const LEVEL_IDS_WITH_SCENES = new Set(SCENES.map((scene) => scene.levelId))
 
 export default async function PlayPage() {
   const cookieStore = await cookies()
@@ -26,9 +29,16 @@ export default async function PlayPage() {
         {levels.map((level) => (
           <li key={level.id}>
             {level.unlocked ? (
-              <Link href={`/play/${level.id}`}>
-                {level.name} — {level.starsEarned} stars
-              </Link>
+              <>
+                {level.name} — {level.starsEarned} stars{' '}
+                <Link href={`/play/${level.id}`}>Listen &amp; Tap</Link>
+                {LEVEL_IDS_WITH_SCENES.has(level.id) && (
+                  <>
+                    {' '}
+                    · <Link href={`/play/${level.id}/scene`}>Find in the Scene</Link>
+                  </>
+                )}
+              </>
             ) : (
               <span>{level.name} — locked</span>
             )}
