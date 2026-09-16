@@ -4,8 +4,8 @@ import path from 'node:path'
 import { LEVELS, VOCAB_ITEMS } from './vocab'
 
 describe('vocab content', () => {
-  it('has exactly 31 items', () => {
-    expect(VOCAB_ITEMS.length).toBe(31)
+  it('has exactly 39 items', () => {
+    expect(VOCAB_ITEMS.length).toBe(39)
   })
 
   it('has a unique slug for every item', () => {
@@ -18,6 +18,12 @@ describe('vocab content', () => {
       expect(item.cantonese.length).toBeGreaterThan(0)
       expect(item.jyutping.length).toBeGreaterThan(0)
       expect(item.englishGloss.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('has a non-empty description for every item', () => {
+    for (const item of VOCAB_ITEMS) {
+      expect(item.description.length).toBeGreaterThan(0)
     }
   })
 
@@ -35,15 +41,15 @@ describe('vocab content', () => {
     expect(nine?.homophoneGroup).toBe('gau2')
   })
 
-  it('has 4 levels in ascending order', () => {
-    expect(LEVELS.map((level) => level.order)).toEqual([1, 2, 3, 4])
+  it('has 5 levels in ascending order', () => {
+    expect(LEVELS.map((level) => level.order)).toEqual([1, 2, 3, 4, 5])
   })
 })
 
 describe('vocab images', () => {
-  it('has a matching SVG image file for every item', () => {
+  it('has a matching PNG image file for every item', () => {
     for (const item of VOCAB_ITEMS) {
-      const imagePath = path.resolve(import.meta.dirname, 'images', `${item.slug}.svg`)
+      const imagePath = path.resolve(import.meta.dirname, 'images', `${item.slug}.png`)
       expect(existsSync(imagePath)).toBe(true)
     }
   })
