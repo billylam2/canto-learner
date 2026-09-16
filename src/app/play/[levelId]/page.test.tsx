@@ -30,6 +30,22 @@ vi.mock('@/lib/db/content', () => ({
 vi.mock('./listen-tap-game', () => ({
   ListenTapGame: ({ levelName }: { levelName: string }) => <div>Playing {levelName}</div>,
 }))
+vi.mock('@/components/guest-level-gate', () => ({
+  GuestLevelGate: ({
+    levelId,
+    gameType,
+    children,
+  }: {
+    levelId: number
+    gameType: string
+    children: (onLevelComplete: (stars: number) => void) => React.ReactNode
+  }) => (
+    <div>
+      Guest gate for level {levelId} ({gameType})
+      {children(() => {})}
+    </div>
+  ),
+}))
 
 import LevelPage from './page'
 import { getProgressForKid } from '@/lib/db/progress'
@@ -51,9 +67,14 @@ describe('LevelPage', () => {
     expect(notFoundMock).toHaveBeenCalled()
   })
 
-  it('redirects to login when there is no session', async () => {
+  it('renders the guest-gated game when there is no session', async () => {
     getMock.mockReturnValue(undefined)
-    await expect(LevelPage({ params: makeParams('1') })).rejects.toThrow('REDIRECT:/login')
+    vi.mocked(getVocabItemsForLevel).mockResolvedValue([])
+
+    render(await LevelPage({ params: makeParams('1') }))
+    expect(screen.getByText('Playing Greetings')).toBeInTheDocument()
+    expect(screen.getByText('Guest gate for level 1 (listen-tap)')).toBeInTheDocument()
+    expect(redirectMock).not.toHaveBeenCalled()
   })
 
   it('redirects to /play when the level is locked', async () => {

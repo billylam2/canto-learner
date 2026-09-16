@@ -7,6 +7,7 @@ import { getVocabItemsForLevel } from '@/lib/db/content'
 import { computeLevelStatus } from '@/lib/game/level-status'
 import { LEVELS } from '../../../../content/vocab'
 import { ListenTapGame } from './listen-tap-game'
+import { GuestLevelGate } from '@/components/guest-level-gate'
 
 export default async function LevelPage({ params }: { params: Promise<{ levelId: string }> }) {
   const { levelId: levelIdParam } = await params
@@ -19,11 +20,24 @@ export default async function LevelPage({ params }: { params: Promise<{ levelId:
 
   const cookieStore = await cookies()
   const session = await readSessionFromCookieValue(cookieStore.get(COOKIE_NAME)?.value)
+  const supabase = createSupabaseServerClient()
+
   if (!session) {
-    redirect('/login')
+    const vocabItems = await getVocabItemsForLevel(supabase, levelId)
+    return (
+      <GuestLevelGate levelId={levelId} gameType="listen-tap">
+        {(onLevelComplete) => (
+          <ListenTapGame
+            levelId={levelId}
+            levelName={level.name}
+            vocabItems={vocabItems}
+            onLevelComplete={onLevelComplete}
+          />
+        )}
+      </GuestLevelGate>
+    )
   }
 
-  const supabase = createSupabaseServerClient()
   const progress = await getProgressForKid(supabase, session.kidId)
   const statuses = computeLevelStatus(LEVELS, progress)
   const status = statuses.find((candidate) => candidate.id === levelId)
