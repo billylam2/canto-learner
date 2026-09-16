@@ -25,10 +25,11 @@ import { getProgressForKid } from '@/lib/db/progress'
 import { createSessionCookieValue } from '@/lib/auth/session'
 
 describe('PlayPage', () => {
-  it('redirects to login when there is no session', async () => {
+  it('renders the guest play page when there is no session, without redirecting to login', async () => {
     getMock.mockReturnValue(undefined)
-    await expect(PlayPage()).rejects.toThrow('REDIRECT:/login')
-    expect(redirectMock).toHaveBeenCalledWith('/login')
+    render(await PlayPage())
+    expect(screen.getByText('Choose a level')).toBeInTheDocument()
+    expect(redirectMock).not.toHaveBeenCalled()
   })
 
   it('shows unlocked levels with a Listen & Tap link and locked levels as plain text', async () => {
