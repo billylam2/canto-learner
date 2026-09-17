@@ -16,7 +16,10 @@
     "generate-one": "tsx --env-file=.env.local scripts/generate-one.ts",
     "generate-scenes": "tsx --env-file=.env.local scripts/generate-scenes.ts",
     "render-scene-debug": "tsx scripts/render-scene-debug.ts",
-    "sync-scenes": "tsx --env-file=.env.local scripts/sync-scenes.ts"
+    "sync-scenes": "tsx --env-file=.env.local scripts/sync-scenes.ts",
+    "generate-accessory": "tsx --env-file=.env.local scripts/generate-accessory.ts",
+    "sync-rewards": "tsx --env-file=.env.local scripts/sync-rewards.ts",
+    "render-pet-debug": "tsx scripts/render-pet-debug.ts"
   },
   "dependencies": {
     "@google-cloud/text-to-speech": "^7.1.0",
