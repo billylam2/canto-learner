@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
 import { createSupabaseServerClient } from '../src/lib/supabase/client'
 import { createTtsClient, synthesizeCantonese } from '../src/lib/content/tts'
@@ -10,13 +10,19 @@ async function main() {
   const supabase = createSupabaseServerClient()
   const tts = createTtsClient()
 
+  const requestedSlugs = process.argv.slice(2)
+  const items = requestedSlugs.length > 0 ? VOCAB_ITEMS.filter((item) => requestedSlugs.includes(item.slug)) : VOCAB_ITEMS
+
   for (const level of LEVELS) {
     await upsertLevel(supabase, level)
     console.log(`Upserted level: ${level.name}`)
   }
 
-  for (const item of VOCAB_ITEMS) {
-    const audioBuffer = await synthesizeCantonese(tts, item.cantonese)
+  for (const item of items) {
+    const audioOverridePath = path.join(process.cwd(), 'content', 'audio', `${item.slug}.mp3`)
+    const audioBuffer = existsSync(audioOverridePath)
+      ? readFileSync(audioOverridePath)
+      : await synthesizeCantonese(tts, item.cantonese)
     const audioUrl = await uploadAsset(supabase, 'vocab-audio', `${item.slug}.mp3`, audioBuffer, 'audio/mpeg')
 
     const imagePath = path.join(process.cwd(), 'content', 'images', `${item.slug}.png`)
@@ -38,7 +44,7 @@ async function main() {
     console.log(`Synced vocab item: ${item.slug}`)
   }
 
-  console.log(`Done. Synced ${VOCAB_ITEMS.length} vocab items across ${LEVELS.length} levels.`)
+  console.log(`Done. Synced ${items.length} vocab items across ${LEVELS.length} levels.`)
 }
 
 main().catch((error) => {
