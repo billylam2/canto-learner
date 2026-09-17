@@ -21,14 +21,14 @@ describe('upsertLevel', () => {
   it('resolves when the upsert succeeds', async () => {
     const supabase = makeSupabaseMock({ upsertResult: { error: null } })
     await expect(
-      upsertLevel(supabase, { id: 1, name: 'Greetings', order: 1, unlockThreshold: 0 })
+      upsertLevel(supabase, { id: 1, name: 'Greetings', order: 1 })
     ).resolves.toBeUndefined()
   })
 
   it('throws when the upsert fails', async () => {
     const supabase = makeSupabaseMock({ upsertResult: { error: { message: 'boom' } } })
     await expect(
-      upsertLevel(supabase, { id: 1, name: 'Greetings', order: 1, unlockThreshold: 0 })
+      upsertLevel(supabase, { id: 1, name: 'Greetings', order: 1 })
     ).rejects.toThrow('Failed to upsert level 1: boom')
   })
 })

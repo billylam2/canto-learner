@@ -5,7 +5,7 @@ import type { VocabGameItem } from '../game/round'
 export async function upsertLevel(supabase: SupabaseClient, level: LevelSource): Promise<void> {
   const { error } = await supabase
     .from('levels')
-    .upsert({ id: level.id, name: level.name, order: level.order, unlock_threshold: level.unlockThreshold })
+    .upsert({ id: level.id, name: level.name, order: level.order })
 
   if (error) {
     throw new Error(`Failed to upsert level ${level.id}: ${error.message}`)

@@ -15,15 +15,14 @@ export interface LevelSource {
   id: number
   name: string
   order: number
-  unlockThreshold: number
 }
 
 export const LEVELS: LevelSource[] = [
-  { id: 1, name: 'Greetings', order: 1, unlockThreshold: 0 },
-  { id: 2, name: 'People & Family', order: 2, unlockThreshold: 20 },
-  { id: 3, name: 'Descriptors & Animals', order: 3, unlockThreshold: 40 },
-  { id: 4, name: 'Numbers', order: 4, unlockThreshold: 60 },
-  { id: 5, name: 'Colors', order: 5, unlockThreshold: 80 },
+  { id: 1, name: 'Greetings', order: 1 },
+  { id: 2, name: 'People & Family', order: 2 },
+  { id: 3, name: 'Descriptors & Animals', order: 3 },
+  { id: 4, name: 'Numbers', order: 4 },
+  { id: 5, name: 'Colors', order: 5 },
 ]
 
 export const VOCAB_ITEMS: VocabSourceItem[] = [
