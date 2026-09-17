@@ -37,4 +37,10 @@ describe('GuestListenTapGame', () => {
     render(<GuestListenTapGame levelId={2} levelName="People & Family" vocabItems={items} />)
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/play'))
   })
+
+  it('shows a reset-progress button', async () => {
+    const items = [makeItem('a')]
+    render(<GuestListenTapGame levelId={1} levelName="Greetings" vocabItems={items} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /reset progress/i })).toBeInTheDocument())
+  })
 })

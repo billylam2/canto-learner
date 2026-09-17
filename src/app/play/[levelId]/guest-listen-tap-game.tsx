@@ -18,6 +18,12 @@ export function GuestListenTapGame({ levelId, levelName, vocabItems }: GuestList
   }
 
   return (
-    <ListenTapGame levelId={levelId} levelName={levelName} vocabItems={vocabItems} onLevelComplete={onLevelComplete} />
+    <ListenTapGame
+      levelId={levelId}
+      levelName={levelName}
+      vocabItems={vocabItems}
+      onLevelComplete={onLevelComplete}
+      showResetGuestProgress
+    />
   )
 }

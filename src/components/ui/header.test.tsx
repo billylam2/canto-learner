@@ -3,9 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const pushMock = vi.fn()
 const refreshMock = vi.fn()
+const clearGuestProgressMock = vi.hoisted(() => vi.fn())
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock, refresh: refreshMock }),
+}))
+
+vi.mock('@/lib/guest/progress', () => ({
+  clearGuestProgress: clearGuestProgressMock,
 }))
 
 import { Header } from './header'
@@ -14,6 +19,7 @@ describe('Header', () => {
   beforeEach(() => {
     pushMock.mockClear()
     refreshMock.mockClear()
+    clearGuestProgressMock.mockClear()
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) } as Response)
   })
 
@@ -43,5 +49,19 @@ describe('Header', () => {
 
     expect(global.fetch).toHaveBeenCalledWith('/api/logout', { method: 'POST' })
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/'))
+  })
+
+  it('does not show a reset-progress button by default', () => {
+    render(<Header />)
+    expect(screen.queryByRole('button', { name: /reset progress/i })).not.toBeInTheDocument()
+  })
+
+  it('resets guest progress and navigates to the main page when showResetGuestProgress is true', async () => {
+    render(<Header showResetGuestProgress />)
+    fireEvent.click(screen.getByRole('button', { name: /reset progress/i }))
+
+    expect(clearGuestProgressMock).toHaveBeenCalled()
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/'))
+    expect(refreshMock).toHaveBeenCalled()
   })
 })

@@ -17,5 +17,13 @@ export function GuestSceneGame({ levelId, levelName, scenes }: GuestSceneGamePro
     return <p>Loading...</p>
   }
 
-  return <SceneGame levelId={levelId} levelName={levelName} scenes={scenes} onLevelComplete={onLevelComplete} />
+  return (
+    <SceneGame
+      levelId={levelId}
+      levelName={levelName}
+      scenes={scenes}
+      onLevelComplete={onLevelComplete}
+      showResetGuestProgress
+    />
+  )
 }

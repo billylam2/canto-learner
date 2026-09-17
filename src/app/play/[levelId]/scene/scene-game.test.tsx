@@ -64,6 +64,12 @@ describe('SceneGame', () => {
     expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument()
   })
 
+  it('shows a reset-progress button when showResetGuestProgress is true', () => {
+    const scenes = [makeScene(1, [DOG])]
+    render(<SceneGame levelId={3} levelName="Descriptors & Animals" scenes={scenes} showResetGuestProgress />)
+    expect(screen.getByRole('button', { name: /reset progress/i })).toBeInTheDocument()
+  })
+
   it('advances to the next question after tapping inside the target hotspot', async () => {
     const scenes = [makeScene(1, [DOG, CAT])]
     render(<SceneGame levelId={3} levelName="Descriptors & Animals" scenes={scenes} />)

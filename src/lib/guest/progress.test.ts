@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { getGuestProgress, saveGuestLevelProgress } from './progress'
+import { getGuestProgress, saveGuestLevelProgress, clearGuestProgress } from './progress'
 
 describe('getGuestProgress', () => {
   beforeEach(() => {
@@ -67,5 +67,22 @@ describe('saveGuestLevelProgress', () => {
       { levelId: 1, starsEarned: 12, completedGameTypes: ['listen-tap'] },
       { levelId: 2, starsEarned: 6, completedGameTypes: ['listen-tap'] },
     ])
+  })
+})
+
+describe('clearGuestProgress', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
+  it('removes previously saved progress', () => {
+    saveGuestLevelProgress(1, 12, 'listen-tap')
+    clearGuestProgress()
+    expect(getGuestProgress()).toEqual([])
+  })
+
+  it('does nothing when there is no stored progress', () => {
+    clearGuestProgress()
+    expect(getGuestProgress()).toEqual([])
   })
 })

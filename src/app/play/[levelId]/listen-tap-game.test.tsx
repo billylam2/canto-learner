@@ -40,6 +40,12 @@ describe('ListenTapGame', () => {
     expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument()
   })
 
+  it('shows a reset-progress button when showResetGuestProgress is true', () => {
+    const items = [makeItem('a')]
+    render(<ListenTapGame levelId={1} levelName="Greetings" vocabItems={items} showResetGuestProgress />)
+    expect(screen.getByRole('button', { name: /reset progress/i })).toBeInTheDocument()
+  })
+
   it('advances to the next item after a correct first-try answer', async () => {
     const items = [makeItem('a'), makeItem('b'), makeItem('c')]
     render(<ListenTapGame levelId={1} levelName="Greetings" vocabItems={items} />)

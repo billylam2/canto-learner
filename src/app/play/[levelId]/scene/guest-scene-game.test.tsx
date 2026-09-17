@@ -41,4 +41,10 @@ describe('GuestSceneGame', () => {
     render(<GuestSceneGame levelId={2} levelName="People & Family" scenes={scenes} />)
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/play'))
   })
+
+  it('shows a reset-progress button', async () => {
+    const scenes = [makeScene(1, [DOG])]
+    render(<GuestSceneGame levelId={1} levelName="Greetings" scenes={scenes} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /reset progress/i })).toBeInTheDocument())
+  })
 })

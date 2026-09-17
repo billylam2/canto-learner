@@ -22,6 +22,7 @@ interface ListenTapGameProps {
   vocabItems: VocabGameItem[]
   onLevelComplete?: (starsEarned: number) => Promise<void> | void
   showLogout?: boolean
+  showResetGuestProgress?: boolean
 }
 
 export function ListenTapGame({
@@ -30,6 +31,7 @@ export function ListenTapGame({
   vocabItems,
   onLevelComplete,
   showLogout = false,
+  showResetGuestProgress = false,
 }: ListenTapGameProps) {
   const router = useRouter()
   const rounds = useMemo(() => buildRounds(vocabItems), [vocabItems])
@@ -114,7 +116,7 @@ export function ListenTapGame({
   if (phase === 'summary') {
     return (
       <div className="min-h-screen bg-brand-bg">
-        <Header showBackLink showLogout={showLogout} />
+        <Header showBackLink showLogout={showLogout} showResetGuestProgress={showResetGuestProgress} />
         <main className="max-w-md mx-auto p-4">
           <Card className="flex flex-col items-center gap-4 text-center">
             <h1 className="text-2xl font-extrabold text-brand-ink">Level complete!</h1>
@@ -132,7 +134,7 @@ export function ListenTapGame({
 
   return (
     <div className="min-h-screen bg-brand-bg">
-      <Header showBackLink showLogout={showLogout} />
+      <Header showBackLink showLogout={showLogout} showResetGuestProgress={showResetGuestProgress} />
       <main className="max-w-md mx-auto p-4">
         <Card className="flex flex-col items-center gap-4">
           <h1 className="text-2xl font-extrabold text-brand-ink">{levelName}</h1>
