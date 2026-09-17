@@ -7,19 +7,37 @@ export interface LevelStatus {
   order: number
   starsEarned: number
   unlocked: boolean
+  sceneUnlocked: boolean
 }
 
-export function computeLevelStatus(levels: LevelSource[], progress: ProgressRow[]): LevelStatus[] {
-  const starsByLevel = new Map(progress.map((row) => [row.levelId, row.starsEarned]))
-  const totalStars = progress.reduce((sum, row) => sum + row.starsEarned, 0)
+export function computeLevelStatus(
+  levels: LevelSource[],
+  progress: ProgressRow[],
+  levelIdsWithScenes: Set<number>
+): LevelStatus[] {
+  const progressByLevel = new Map(progress.map((row) => [row.levelId, row]))
+  const sortedLevels = [...levels].sort((a, b) => a.order - b.order)
 
-  return [...levels]
-    .sort((a, b) => a.order - b.order)
-    .map((level) => ({
+  function terminalStepFor(levelId: number): string {
+    return levelIdsWithScenes.has(levelId) ? 'find-scene' : 'listen-tap'
+  }
+
+  function hasCompleted(levelId: number, gameType: string): boolean {
+    return progressByLevel.get(levelId)?.completedGameTypes.includes(gameType) ?? false
+  }
+
+  return sortedLevels.map((level, index) => {
+    const previousLevel = sortedLevels[index - 1]
+    const unlocked = index === 0 || hasCompleted(previousLevel.id, terminalStepFor(previousLevel.id))
+    const sceneUnlocked = unlocked && hasCompleted(level.id, 'listen-tap')
+
+    return {
       id: level.id,
       name: level.name,
       order: level.order,
-      starsEarned: starsByLevel.get(level.id) ?? 0,
-      unlocked: totalStars >= level.unlockThreshold,
-    }))
+      starsEarned: progressByLevel.get(level.id)?.starsEarned ?? 0,
+      unlocked,
+      sceneUnlocked,
+    }
+  })
 }
