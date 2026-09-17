@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 const MODEL = 'gemini-2.5-flash-image'
 const REGION = 'us-central1'
 export const DEFAULT_STYLE_SUFFIX =
-  'cute flat cartoon illustration, thick black outlines, solid bright colors, simple white background, no text, centered'
+  'in the style of a modern 3D Pixar animated film (like Inside Out), soft rounded character shapes, warm expressive lighting and soft shadows, vibrant but natural colors, smooth clay-like shading, simple softly-lit background, no text, centered'
 
 export interface ImageGenDeps {
   getAccessToken: () => string

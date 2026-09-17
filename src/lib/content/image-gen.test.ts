@@ -43,7 +43,7 @@ describe('generateImage', () => {
     const body = JSON.parse((call[1] as RequestInit).body as string)
     const prompt = body.contents[0].parts[0].text as string
     expect(prompt).toContain('a cute cat')
-    expect(prompt).toContain('thick black outlines')
+    expect(prompt).toContain('Pixar')
   })
 
   it('sends the request to the given project id', async () => {
@@ -80,6 +80,6 @@ describe('generateImage', () => {
   })
 
   it('exports the default style suffix used by vocab-icon generation', () => {
-    expect(DEFAULT_STYLE_SUFFIX).toContain('simple white background')
+    expect(DEFAULT_STYLE_SUFFIX).toContain('Pixar')
   })
 })

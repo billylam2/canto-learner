@@ -13,6 +13,7 @@
     "test": "vitest run",
     "sync-content": "tsx --env-file=.env.local scripts/sync-content.ts",
     "generate-images": "tsx --env-file=.env.local scripts/generate-images.ts",
+    "generate-one": "tsx --env-file=.env.local scripts/generate-one.ts",
     "generate-scenes": "tsx --env-file=.env.local scripts/generate-scenes.ts",
     "render-scene-debug": "tsx scripts/render-scene-debug.ts",
     "sync-scenes": "tsx --env-file=.env.local scripts/sync-scenes.ts"

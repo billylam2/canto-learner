@@ -28,14 +28,14 @@ export const LEVELS: LevelSource[] = [
 
 export const VOCAB_ITEMS: VocabSourceItem[] = [
   // Level 1: Greetings
-  { slug: 'hello', category: 'greetings', level: 1, cantonese: '你好', jyutping: 'nei5 hou2', englishGloss: 'hello', description: 'a cartoon hand waving hello' },
+  { slug: 'hello', category: 'greetings', level: 1, cantonese: '你好', jyutping: 'nei5 hou2', englishGloss: 'hello', description: 'two cartoon people facing each other and waving hello' },
   { slug: 'hello-everyone', category: 'greetings', level: 1, cantonese: '大家好', jyutping: 'daai6 gaa1 hou2', englishGloss: 'hello everyone', description: 'three cartoon friends waving hello together' },
-  { slug: 'good-morning', category: 'greetings', level: 1, cantonese: '早晨', jyutping: 'zou2 san4', englishGloss: 'good morning', description: 'a bright cartoon sun rising over hills' },
-  { slug: 'good-evening', category: 'greetings', level: 1, cantonese: '晚安', jyutping: 'maan5 on1', englishGloss: 'good evening', description: 'a cartoon crescent moon with stars at night' },
-  { slug: 'goodbye', category: 'greetings', level: 1, cantonese: '拜拜', jyutping: 'baai1 baai3', englishGloss: 'goodbye', description: 'a cartoon child walking away while waving goodbye over their shoulder, seen from behind' },
-  { slug: 'thank-you', category: 'greetings', level: 1, cantonese: '唔該', jyutping: 'm4 goi1', englishGloss: 'thank you', description: 'two cartoon hands pressed together in a thank-you gesture' },
-  { slug: 'excuse-me', category: 'greetings', level: 1, cantonese: '唔好意思', jyutping: 'm4 hou2 ji3 si1', englishGloss: 'excuse me', description: 'a cartoon hand raised politely asking for attention' },
-  { slug: 'sorry', category: 'greetings', level: 1, cantonese: '對唔住', jyutping: 'deoi3 m4 zyu6', englishGloss: 'sorry', description: 'a cute cartoon face looking sorry with one small tear' },
+  { slug: 'good-morning', category: 'greetings', level: 1, cantonese: '早晨', jyutping: 'zou2 san4', englishGloss: 'good morning', description: 'a cartoon kid sitting up in bed, looking sleepy, waving, with warm bright sunlight streaming into the room' },
+  { slug: 'good-evening', category: 'greetings', level: 1, cantonese: '晚安', jyutping: 'maan5 on1', englishGloss: 'good evening', description: 'a cartoon kid looking sleepy in bed, waving, in a dark room lit only by a soft nightlight glow' },
+  { slug: 'goodbye', category: 'greetings', level: 1, cantonese: '拜拜', jyutping: 'baai1 baai3', englishGloss: 'goodbye', description: 'two cartoon people walking away from each other, waving goodbye over their shoulders' },
+  { slug: 'thank-you', category: 'greetings', level: 1, cantonese: '唔該', jyutping: 'm4 goi1', englishGloss: 'thank you', description: 'a cartoon teacher receiving a bouquet of flowers and clasping her hands together with joy' },
+  { slug: 'excuse-me', category: 'greetings', level: 1, cantonese: '唔好意思', jyutping: 'm4 hou2 ji3 si1', englishGloss: 'excuse me', description: 'a cartoon kid politely trying to get the attention of an adult teacher who is reading a book and not noticing them' },
+  { slug: 'sorry', category: 'greetings', level: 1, cantonese: '對唔住', jyutping: 'deoi3 m4 zyu6', englishGloss: 'sorry', description: 'a cartoon kid standing next to a broken vase on the floor, looking sad and apologetic' },
   // Level 2: People & Family
   { slug: 'i-me', category: 'people', level: 2, cantonese: '我', jyutping: 'ngo5', englishGloss: 'I / me', description: 'a cartoon child pointing to themselves' },
   { slug: 'you', category: 'people', level: 2, cantonese: '你', jyutping: 'nei5', englishGloss: 'you', description: 'a cartoon child pointing forward at the viewer' },
@@ -47,8 +47,8 @@ export const VOCAB_ITEMS: VocabSourceItem[] = [
   { slug: 'older-sister', category: 'family', level: 2, cantonese: '姐姐', jyutping: 'ze4 ze1', englishGloss: 'older sister', description: 'a cartoon older sister, a taller girl with a bow in her hair' },
   { slug: 'younger-sister', category: 'family', level: 2, cantonese: '妹妹', jyutping: 'mui4 mui2', englishGloss: 'younger sister', description: 'a cartoon younger sister, a small girl with a bow in her hair' },
   // Level 3: Descriptors & Animals
-  { slug: 'big', category: 'descriptors', level: 3, cantonese: '大', jyutping: 'daai6', englishGloss: 'big', description: 'a very large cartoon circle' },
-  { slug: 'small', category: 'descriptors', level: 3, cantonese: '細', jyutping: 'sai3', englishGloss: 'small', description: 'a very small cartoon circle' },
+  { slug: 'big', category: 'descriptors', level: 3, cantonese: '大', jyutping: 'daai6', englishGloss: 'big', description: 'a huge, comically oversized cartoon elephant, appearing enormous' },
+  { slug: 'small', category: 'descriptors', level: 3, cantonese: '細', jyutping: 'sai3', englishGloss: 'small', description: 'a tiny cartoon mouse, appearing comically small, with lots of empty space around it' },
   { slug: 'cat', category: 'animals', level: 3, cantonese: '貓', jyutping: 'maau1', englishGloss: 'cat', description: 'a cute cartoon cat sitting down' },
   { slug: 'dog', category: 'animals', level: 3, cantonese: '狗', jyutping: 'gau2', englishGloss: 'dog', description: 'a cute cartoon dog sitting down', homophoneGroup: 'gau2' },
   // Level 4: Numbers
