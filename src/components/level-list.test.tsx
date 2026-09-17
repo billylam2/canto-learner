@@ -13,9 +13,11 @@ describe('LevelList', () => {
 
     const greetingsItem = screen.getByText(/Greetings/).closest('li')
     expect(greetingsItem).not.toBeNull()
-    expect(within(greetingsItem as HTMLElement).getByText('10 stars')).toBeInTheDocument()
+    // Level 1 (Greetings) has 8 vocab items, so its max is 8 * 3 = 24 stars.
+    expect(within(greetingsItem as HTMLElement).getByText('10 / 24 stars')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Listen & Tap' })).toHaveAttribute('href', '/play/1')
-    expect(screen.getByText(/People & Family — locked/)).toBeInTheDocument()
+    // Level 2 (People & Family) has an unlockThreshold of 20.
+    expect(screen.getByText(/People & Family — locked \(unlocks at 20 stars\)/)).toBeInTheDocument()
   })
 
   it('shows a Find in the Scene link only for levels that have scene content', () => {

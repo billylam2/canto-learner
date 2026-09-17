@@ -13,4 +13,9 @@ describe('StarRating', () => {
     const svg = container.querySelector('svg')
     expect(svg).toHaveAttribute('aria-hidden', 'true')
   })
+
+  it('renders the max stars when provided', () => {
+    render(<StarRating stars={12} maxStars={24} />)
+    expect(screen.getByText('12 / 24 stars')).toBeInTheDocument()
+  })
 })
