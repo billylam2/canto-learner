@@ -18,4 +18,9 @@ describe('GuestPlayPage', () => {
     render(<GuestPlayPage />)
     await waitFor(() => expect(screen.getByRole('button', { name: /reset progress/i })).toBeInTheDocument())
   })
+
+  it('links to the pet page', async () => {
+    render(<GuestPlayPage />)
+    await waitFor(() => expect(screen.getByRole('link', { name: /my pet/i })).toHaveAttribute('href', '/pet'))
+  })
 })
