@@ -27,7 +27,7 @@ export function Header({ showBackLink = false, showLogout = false, showResetGues
 
   return (
     <header className="bg-brand-primary border-b-4 border-brand-ink px-4 py-3 flex items-center justify-between">
-      <span className="font-extrabold text-2xl text-white tracking-wide">Canto</span>
+      <span className="font-extrabold text-2xl text-white tracking-wide">Canto Learner</span>
       <div className="flex items-center gap-4">
         {showBackLink && (
           <Link href="/play" className="font-bold text-white underline decoration-2 underline-offset-2">

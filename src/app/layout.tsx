@@ -8,8 +8,7 @@ const baloo2 = Baloo_2({
 })
 
 export const metadata = {
-  title: 'Canto',
-  description: 'Learn Cantonese through play',
+  title: 'Canto Learner',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
