@@ -4,9 +4,10 @@ import type { VocabGameItem } from '@/lib/game/round'
 import { ListenTapGame } from './listen-tap-game'
 
 const pushMock = vi.fn()
+const refreshMock = vi.fn()
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: pushMock }),
+  useRouter: () => ({ push: pushMock, refresh: refreshMock }),
 }))
 
 function makeItem(id: string): VocabGameItem {
@@ -22,8 +23,21 @@ function makeItem(id: string): VocabGameItem {
 describe('ListenTapGame', () => {
   beforeEach(() => {
     pushMock.mockClear()
+    refreshMock.mockClear()
     window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) } as Response)
+  })
+
+  it('does not show a log out button by default', () => {
+    const items = [makeItem('a')]
+    render(<ListenTapGame levelId={1} levelName="Greetings" vocabItems={items} />)
+    expect(screen.queryByRole('button', { name: /log out/i })).not.toBeInTheDocument()
+  })
+
+  it('shows a log out button when showLogout is true', () => {
+    const items = [makeItem('a')]
+    render(<ListenTapGame levelId={1} levelName="Greetings" vocabItems={items} showLogout />)
+    expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument()
   })
 
   it('advances to the next item after a correct first-try answer', async () => {

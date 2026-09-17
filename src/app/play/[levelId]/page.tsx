@@ -37,5 +37,5 @@ export default async function LevelPage({ params }: { params: Promise<{ levelId:
 
   const vocabItems = await getVocabItemsForLevel(supabase, levelId)
 
-  return <ListenTapGame levelId={levelId} levelName={level.name} vocabItems={vocabItems} />
+  return <ListenTapGame levelId={levelId} levelName={level.name} vocabItems={vocabItems} showLogout />
 }

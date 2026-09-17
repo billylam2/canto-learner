@@ -4,9 +4,10 @@ import type { SceneGameData } from '@/lib/db/scenes'
 import { SceneGame } from './scene-game'
 
 const pushMock = vi.fn()
+const refreshMock = vi.fn()
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: pushMock }),
+  useRouter: () => ({ push: pushMock, refresh: refreshMock }),
 }))
 
 function makeScene(id: number, objects: SceneGameData['objects']): SceneGameData {
@@ -35,6 +36,7 @@ const CAT = {
 describe('SceneGame', () => {
   beforeEach(() => {
     pushMock.mockClear()
+    refreshMock.mockClear()
     window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) } as Response)
     Element.prototype.getBoundingClientRect = vi.fn(() => ({
@@ -48,6 +50,18 @@ describe('SceneGame', () => {
       y: 0,
       toJSON: () => {},
     })) as unknown as () => DOMRect
+  })
+
+  it('does not show a log out button by default', () => {
+    const scenes = [makeScene(1, [DOG])]
+    render(<SceneGame levelId={3} levelName="Descriptors & Animals" scenes={scenes} />)
+    expect(screen.queryByRole('button', { name: /log out/i })).not.toBeInTheDocument()
+  })
+
+  it('shows a log out button when showLogout is true', () => {
+    const scenes = [makeScene(1, [DOG])]
+    render(<SceneGame levelId={3} levelName="Descriptors & Animals" scenes={scenes} showLogout />)
+    expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument()
   })
 
   it('advances to the next question after tapping inside the target hotspot', async () => {

@@ -16,6 +16,7 @@ interface SceneGameProps {
   levelName: string
   scenes: SceneGameData[]
   onLevelComplete?: (starsEarned: number) => Promise<void> | void
+  showLogout?: boolean
 }
 
 interface Question {
@@ -23,7 +24,7 @@ interface Question {
   objectIndex: number
 }
 
-export function SceneGame({ levelId, levelName, scenes, onLevelComplete }: SceneGameProps) {
+export function SceneGame({ levelId, levelName, scenes, onLevelComplete, showLogout = false }: SceneGameProps) {
   const router = useRouter()
 
   // Fixed insertion order across scenes and their objects — no
@@ -105,7 +106,7 @@ export function SceneGame({ levelId, levelName, scenes, onLevelComplete }: Scene
   if (phase === 'summary') {
     return (
       <div className="min-h-screen bg-brand-bg">
-        <Header showBackLink />
+        <Header showBackLink showLogout={showLogout} />
         <main className="max-w-md mx-auto p-4">
           <Card className="flex flex-col items-center gap-4 text-center">
             <h1 className="text-2xl font-extrabold text-brand-ink">Level complete!</h1>
@@ -123,7 +124,7 @@ export function SceneGame({ levelId, levelName, scenes, onLevelComplete }: Scene
 
   return (
     <div className="min-h-screen bg-brand-bg">
-      <Header showBackLink />
+      <Header showBackLink showLogout={showLogout} />
       <main className="max-w-2xl mx-auto p-4">
         <Card className="flex flex-col items-center gap-4">
           <h1 className="text-2xl font-extrabold text-brand-ink">{levelName}</h1>

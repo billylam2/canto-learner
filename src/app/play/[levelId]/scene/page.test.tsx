@@ -28,7 +28,11 @@ vi.mock('@/lib/db/scenes', () => ({
   getScenesForLevel: vi.fn(),
 }))
 vi.mock('./scene-game', () => ({
-  SceneGame: ({ levelName }: { levelName: string }) => <div>Playing scene: {levelName}</div>,
+  SceneGame: ({ levelName, showLogout }: { levelName: string; showLogout?: boolean }) => (
+    <div>
+      Playing scene: {levelName} {showLogout ? '(logout shown)' : '(no logout)'}
+    </div>
+  ),
 }))
 vi.mock('./guest-scene-game', () => ({
   GuestSceneGame: ({ levelId, levelName }: { levelId: number; levelName: string }) => (
@@ -101,6 +105,6 @@ describe('ScenePage', () => {
     vi.mocked(getScenesForLevel).mockResolvedValue([{ id: 1, imageUrl: 'https://example.com/s.png', objects: [] }])
 
     render(await ScenePage({ params: makeParams('1') }))
-    expect(screen.getByText('Playing scene: Greetings')).toBeInTheDocument()
+    expect(screen.getByText('Playing scene: Greetings (logout shown)')).toBeInTheDocument()
   })
 })

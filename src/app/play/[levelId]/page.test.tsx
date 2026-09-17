@@ -28,7 +28,11 @@ vi.mock('@/lib/db/content', () => ({
   getVocabItemsForLevel: vi.fn(),
 }))
 vi.mock('./listen-tap-game', () => ({
-  ListenTapGame: ({ levelName }: { levelName: string }) => <div>Playing {levelName}</div>,
+  ListenTapGame: ({ levelName, showLogout }: { levelName: string; showLogout?: boolean }) => (
+    <div>
+      Playing {levelName} {showLogout ? '(logout shown)' : '(no logout)'}
+    </div>
+  ),
 }))
 vi.mock('./guest-listen-tap-game', () => ({
   GuestListenTapGame: ({ levelId, levelName }: { levelId: number; levelName: string }) => (
@@ -84,6 +88,6 @@ describe('LevelPage', () => {
     vi.mocked(getVocabItemsForLevel).mockResolvedValue([])
 
     render(await LevelPage({ params: makeParams('1') }))
-    expect(screen.getByText('Playing Greetings')).toBeInTheDocument()
+    expect(screen.getByText('Playing Greetings (logout shown)')).toBeInTheDocument()
   })
 })

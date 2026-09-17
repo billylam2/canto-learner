@@ -43,5 +43,5 @@ export default async function ScenePage({ params }: { params: Promise<{ levelId:
     notFound()
   }
 
-  return <SceneGame levelId={levelId} levelName={level.name} scenes={scenes} />
+  return <SceneGame levelId={levelId} levelName={level.name} scenes={scenes} showLogout />
 }

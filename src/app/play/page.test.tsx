@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 
 const redirectMock = vi.fn()
 const getMock = vi.fn()
+const pushMock = vi.fn()
 
 vi.mock('next/headers', () => ({
   cookies: async () => ({ get: getMock }),
@@ -12,6 +13,7 @@ vi.mock('next/navigation', () => ({
     redirectMock(url)
     throw new Error(`REDIRECT:${url}`)
   },
+  useRouter: () => ({ push: pushMock, refresh: vi.fn() }),
 }))
 vi.mock('@/lib/supabase/client', () => ({
   createSupabaseServerClient: vi.fn(() => ({})),
@@ -30,6 +32,7 @@ describe('PlayPage', () => {
     render(await PlayPage())
     expect(screen.getByText('Choose a level')).toBeInTheDocument()
     expect(redirectMock).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: /log out/i })).not.toBeInTheDocument()
   })
 
   it('shows unlocked levels with a Listen & Tap link and locked levels as plain text', async () => {
@@ -47,6 +50,7 @@ describe('PlayPage', () => {
     expect(within(greetingsItem as HTMLElement).getByText('10 stars')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Listen & Tap' })).toHaveAttribute('href', '/play/1')
     expect(screen.getByText(/People & Family — locked/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument()
   })
 
   it('shows a Find in the Scene link only for unlocked levels that have scenes', async () => {

@@ -1,9 +1,8 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { Header } from '@/components/ui/header'
 import { Card } from '@/components/ui/card'
-import { Button, LinkButton } from '@/components/ui/button'
+import { LinkButton } from '@/components/ui/button'
 
 export function GuestHome() {
   return (
@@ -31,23 +30,12 @@ export function GuestHome() {
 }
 
 export function AuthenticatedHome({ username }: { username: string }) {
-  const router = useRouter()
-
-  async function handleLogout() {
-    await fetch('/api/logout', { method: 'POST' })
-    router.push('/login')
-    router.refresh()
-  }
-
   return (
     <div className="min-h-screen bg-brand-bg">
-      <Header />
+      <Header showLogout />
       <main className="max-w-md mx-auto p-4">
         <Card className="flex flex-col items-center gap-4 text-center">
           <h1 className="text-2xl font-extrabold text-brand-ink">Welcome back, {username}!</h1>
-          <Button onClick={handleLogout} variant="secondary">
-            Log out
-          </Button>
         </Card>
       </main>
     </div>

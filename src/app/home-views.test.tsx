@@ -30,9 +30,9 @@ describe('AuthenticatedHome', () => {
     expect(screen.getByText('Welcome back, mimi!')).toBeInTheDocument()
   })
 
-  it('logs out and redirects to login', async () => {
+  it('logs out via the header and navigates to the main page', async () => {
     render(<AuthenticatedHome username="mimi" />)
     fireEvent.click(screen.getByRole('button', { name: /log out/i }))
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/login'))
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/'))
   })
 })
