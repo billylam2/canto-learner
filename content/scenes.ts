@@ -54,18 +54,18 @@ export const SCENE_OBJECTS: SceneObjectSource[] = [
   { sceneSlug: 'scene-dog-cat', vocabSlug: 'cat', xPercent: 56, yPercent: 48, widthPercent: 36, heightPercent: 45 },
   { sceneSlug: 'scene-dog-cat', vocabSlug: 'small', xPercent: 56, yPercent: 48, widthPercent: 36, heightPercent: 45 },
 
-  // scene-colors-balloons: NOT re-authored — the regenerated image only shows
-  // 6 balloons (red, orange, green, blue, purple, white); yellow and black
-  // are missing, so these coordinates still describe the OLD 8-balloon image.
-  // Re-author once the image itself is fixed to show all 8 colors.
-  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-red', xPercent: 7, yPercent: 28, widthPercent: 11, heightPercent: 42 },
-  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-orange', xPercent: 18, yPercent: 28, widthPercent: 11, heightPercent: 42 },
-  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-yellow', xPercent: 29, yPercent: 28, widthPercent: 11, heightPercent: 42 },
-  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-green', xPercent: 40, yPercent: 28, widthPercent: 11, heightPercent: 42 },
-  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-blue', xPercent: 51, yPercent: 28, widthPercent: 11, heightPercent: 42 },
-  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-purple', xPercent: 62, yPercent: 28, widthPercent: 11, heightPercent: 42 },
-  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-black', xPercent: 73, yPercent: 28, widthPercent: 11, heightPercent: 42 },
-  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-white', xPercent: 84, yPercent: 28, widthPercent: 11, heightPercent: 42 },
+  // scene-colors-balloons: re-authored 2026-09-17 for the new 8-balloon,
+  // non-overlapping layout (512x512 image). Approximate clockwise from top-left:
+  // red, yellow, white (top row), purple (right), orange, black, blue (middle),
+  // green (left).
+  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-red', xPercent: 18, yPercent: 18, widthPercent: 26, heightPercent: 26 },
+  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-yellow', xPercent: 42, yPercent: 18, widthPercent: 26, heightPercent: 26 },
+  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-white', xPercent: 62, yPercent: 5, widthPercent: 24, heightPercent: 24 },
+  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-purple', xPercent: 74, yPercent: 30, widthPercent: 24, heightPercent: 26 },
+  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-green', xPercent: 4, yPercent: 38, widthPercent: 28, heightPercent: 28 },
+  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-blue', xPercent: 26, yPercent: 46, widthPercent: 24, heightPercent: 26 },
+  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-orange', xPercent: 58, yPercent: 44, widthPercent: 24, heightPercent: 26 },
+  { sceneSlug: 'scene-colors-balloons', vocabSlug: 'color-black', xPercent: 48, yPercent: 65, widthPercent: 26, heightPercent: 28 },
 
   // scene-family-home: left to right — mom (yellow sweater), dad (blue shirt,
   // beard), older brother (green/tan striped hoodie), older sister (floral dress)
