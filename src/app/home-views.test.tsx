@@ -35,4 +35,9 @@ describe('AuthenticatedHome', () => {
     fireEvent.click(screen.getByRole('button', { name: /log out/i }))
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/'))
   })
+
+  it('links to the play page', () => {
+    render(<AuthenticatedHome username="mimi" />)
+    expect(screen.getByRole('link', { name: /play/i })).toHaveAttribute('href', '/play')
+  })
 })

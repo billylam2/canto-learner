@@ -17,7 +17,7 @@ describe('LoginPage', () => {
     global.fetch = vi.fn()
   })
 
-  it('submits the form and redirects on success', async () => {
+  it('submits the form and redirects to the play page on success', async () => {
     vi.mocked(global.fetch).mockResolvedValue({
       ok: true,
       json: async () => ({ id: '1', username: 'mimi' }),
@@ -28,7 +28,7 @@ describe('LoginPage', () => {
     fireEvent.change(screen.getByLabelText('4-digit PIN'), { target: { value: '4821' } })
     fireEvent.click(screen.getByRole('button', { name: /log in/i }))
 
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/'))
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/play'))
   })
 
   it('shows an error message when login fails', async () => {
