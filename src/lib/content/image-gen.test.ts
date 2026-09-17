@@ -82,4 +82,40 @@ describe('generateImage', () => {
   it('exports the default style suffix used by vocab-icon generation', () => {
     expect(DEFAULT_STYLE_SUFFIX).toContain('Pixar')
   })
+
+  it('retries on 429 and succeeds once the rate limit clears', async () => {
+    const successBody = {
+      candidates: [{ content: { parts: [{ inlineData: { data: Buffer.from('fake-image').toString('base64') } }] } }],
+    }
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 429, json: async () => ({}), text: async () => 'rate limited' })
+      .mockResolvedValueOnce({ ok: false, status: 429, json: async () => ({}), text: async () => 'rate limited' })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => successBody, text: async () => '' })
+    const sleep = vi.fn().mockResolvedValue(undefined)
+    const deps: ImageGenDeps = { getAccessToken: () => 'fake-token', fetchImpl: fetchImpl as unknown as typeof fetch, sleep }
+
+    const result = await generateImage('proj-1', 'a cute cat', deps)
+
+    expect(result.toString()).toBe('fake-image')
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(sleep).toHaveBeenCalledTimes(2)
+  })
+
+  it('throws after exhausting retries on repeated 429s', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 429, json: async () => ({}), text: async () => 'rate limited' })
+    const sleep = vi.fn().mockResolvedValue(undefined)
+    const deps: ImageGenDeps = { getAccessToken: () => 'fake-token', fetchImpl: fetchImpl as unknown as typeof fetch, sleep }
+
+    await expect(generateImage('proj-1', 'a cute cat', deps)).rejects.toThrow(/rate limit/i)
+    expect(fetchImpl).toHaveBeenCalledTimes(5)
+  })
+
+  it('does not retry on non-429 failures', async () => {
+    const deps = makeDeps({ status: 500, text: 'server error' })
+    await expect(generateImage('proj-1', 'a cute cat', deps)).rejects.toThrow('Image generation failed')
+    expect(vi.mocked(deps.fetchImpl)).toHaveBeenCalledTimes(1)
+  })
 })
