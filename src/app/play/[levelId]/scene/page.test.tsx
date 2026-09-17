@@ -91,7 +91,11 @@ describe('ScenePage', () => {
     process.env.SESSION_SECRET = 'a'.repeat(32)
     const cookieValue = await createSessionCookieValue({ kidId: 'kid-1', username: 'mimi' })
     getMock.mockReturnValue({ value: cookieValue })
-    vi.mocked(getProgressForKid).mockResolvedValue([])
+    // Level 1 has no scene content; completing its own listen-tap satisfies
+    // sceneUnlocked so the test reaches the "no scenes" check in the page.
+    vi.mocked(getProgressForKid).mockResolvedValue([
+      { levelId: 1, starsEarned: 3, completedGameTypes: ['listen-tap'] },
+    ])
     vi.mocked(getScenesForLevel).mockResolvedValue([])
 
     await expect(ScenePage({ params: makeParams('1') })).rejects.toThrow('NOT_FOUND')
@@ -101,7 +105,9 @@ describe('ScenePage', () => {
     process.env.SESSION_SECRET = 'a'.repeat(32)
     const cookieValue = await createSessionCookieValue({ kidId: 'kid-1', username: 'mimi' })
     getMock.mockReturnValue({ value: cookieValue })
-    vi.mocked(getProgressForKid).mockResolvedValue([])
+    vi.mocked(getProgressForKid).mockResolvedValue([
+      { levelId: 1, starsEarned: 3, completedGameTypes: ['listen-tap'] },
+    ])
     vi.mocked(getScenesForLevel).mockResolvedValue([{ id: 1, imageUrl: 'https://example.com/s.png', objects: [] }])
 
     render(await ScenePage({ params: makeParams('1') }))

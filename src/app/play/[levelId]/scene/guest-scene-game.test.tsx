@@ -8,6 +8,7 @@ vi.mock('next/navigation', () => ({
 }))
 
 import { GuestSceneGame } from './guest-scene-game'
+import { saveGuestLevelProgress } from '@/lib/guest/progress'
 
 function makeScene(id: number, objects: SceneGameData['objects']): SceneGameData {
   return { id, imageUrl: `https://example.com/scene-${id}.png`, objects }
@@ -31,6 +32,9 @@ describe('GuestSceneGame', () => {
   })
 
   it('renders the game once the level is confirmed unlocked', async () => {
+    // Level 1 has no scene content in production, but find-scene's own gate
+    // still requires level 1's own listen-tap to be completed first.
+    saveGuestLevelProgress(1, 3, 'listen-tap')
     const scenes = [makeScene(1, [DOG])]
     render(<GuestSceneGame levelId={1} levelName="Greetings" scenes={scenes} />)
     await waitFor(() => expect(screen.getByText('Greetings')).toBeInTheDocument())
@@ -43,6 +47,7 @@ describe('GuestSceneGame', () => {
   })
 
   it('shows a reset-progress button', async () => {
+    saveGuestLevelProgress(1, 3, 'listen-tap')
     const scenes = [makeScene(1, [DOG])]
     render(<GuestSceneGame levelId={1} levelName="Greetings" scenes={scenes} />)
     await waitFor(() => expect(screen.getByRole('button', { name: /reset progress/i })).toBeInTheDocument())

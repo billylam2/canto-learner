@@ -6,6 +6,7 @@ import { getProgressForKid } from '@/lib/db/progress'
 import { getVocabItemsForLevel } from '@/lib/db/content'
 import { computeLevelStatus } from '@/lib/game/level-status'
 import { LEVELS } from '../../../../content/vocab'
+import { SCENES } from '../../../../content/scenes'
 import { ListenTapGame } from './listen-tap-game'
 import { GuestListenTapGame } from './guest-listen-tap-game'
 
@@ -28,7 +29,8 @@ export default async function LevelPage({ params }: { params: Promise<{ levelId:
   }
 
   const progress = await getProgressForKid(supabase, session.kidId)
-  const statuses = computeLevelStatus(LEVELS, progress)
+  const levelIdsWithScenes = new Set(SCENES.map((scene) => scene.levelId))
+  const statuses = computeLevelStatus(LEVELS, progress, levelIdsWithScenes)
   const status = statuses.find((candidate) => candidate.id === levelId)
 
   if (!status?.unlocked) {

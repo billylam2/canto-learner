@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { getGuestProgress } from '@/lib/guest/progress'
 import { computeLevelStatus, type LevelStatus } from '@/lib/game/level-status'
 import { LEVELS } from '../../content/vocab'
+import { SCENES } from '../../content/scenes'
 import { Header } from '@/components/ui/header'
 import { LevelList } from '@/components/level-list'
 
@@ -14,8 +15,9 @@ export function GuestPlayPage() {
     // Reading localStorage can only happen client-side, so this can't be
     // computed during the initial (server-rendered) render without a
     // hydration mismatch — it genuinely needs to run post-mount.
+    const levelIdsWithScenes = new Set(SCENES.map((scene) => scene.levelId))
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLevels(computeLevelStatus(LEVELS, getGuestProgress()))
+    setLevels(computeLevelStatus(LEVELS, getGuestProgress(), levelIdsWithScenes))
   }, [])
 
   return (

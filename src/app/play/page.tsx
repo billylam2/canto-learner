@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/client'
 import { getProgressForKid } from '@/lib/db/progress'
 import { computeLevelStatus } from '@/lib/game/level-status'
 import { LEVELS } from '../../../content/vocab'
+import { SCENES } from '../../../content/scenes'
 import { Header } from '@/components/ui/header'
 import { LevelList } from '@/components/level-list'
 import { GuestPlayPage } from '../guest-play-page'
@@ -18,7 +19,8 @@ export default async function PlayPage() {
 
   const supabase = createSupabaseServerClient()
   const progress = await getProgressForKid(supabase, session.kidId)
-  const levels = computeLevelStatus(LEVELS, progress)
+  const levelIdsWithScenes = new Set(SCENES.map((scene) => scene.levelId))
+  const levels = computeLevelStatus(LEVELS, progress, levelIdsWithScenes)
 
   return (
     <div className="min-h-screen bg-brand-bg">
