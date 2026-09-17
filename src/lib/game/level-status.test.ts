@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeLevelStatus, computeLifetimeStars } from './level-status'
+import { computeLevelStatus } from './level-status'
 
 const LEVELS = [
   { id: 1, name: 'Greetings', order: 1 },
@@ -95,19 +95,5 @@ describe('computeLevelStatus', () => {
       LEVEL_IDS_WITH_SCENES
     )
     expect(result[1].starsEarned).toBe(15)
-  })
-})
-
-describe('computeLifetimeStars', () => {
-  it('sums stars earned across all levels', () => {
-    const progress = [
-      { levelId: 1, starsEarned: 24, completedGameTypes: ['listen-tap'] },
-      { levelId: 2, starsEarned: 10, completedGameTypes: ['listen-tap'] },
-    ]
-    expect(computeLifetimeStars(progress)).toBe(34)
-  })
-
-  it('returns 0 for empty progress', () => {
-    expect(computeLifetimeStars([])).toBe(0)
   })
 })

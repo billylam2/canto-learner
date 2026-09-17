@@ -41,7 +41,3 @@ export function computeLevelStatus(
     }
   })
 }
-
-export function computeLifetimeStars(progress: ProgressRow[]): number {
-  return progress.reduce((sum, row) => sum + row.starsEarned, 0)
-}

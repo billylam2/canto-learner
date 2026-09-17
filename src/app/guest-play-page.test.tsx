@@ -18,10 +18,4 @@ describe('GuestPlayPage', () => {
     render(<GuestPlayPage />)
     await waitFor(() => expect(screen.getByRole('button', { name: /reset progress/i })).toBeInTheDocument())
   })
-
-  it('does not link to the pet page while the reward system is disabled', async () => {
-    render(<GuestPlayPage />)
-    await waitFor(() => expect(screen.getByRole('button', { name: /reset progress/i })).toBeInTheDocument())
-    expect(screen.queryByRole('link', { name: /my pet/i })).not.toBeInTheDocument()
-  })
 })

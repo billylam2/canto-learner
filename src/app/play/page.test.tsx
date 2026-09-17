@@ -58,8 +58,6 @@ describe('PlayPage', () => {
     // find-scene is completed.
     expect(screen.getByText(/Descriptors & Animals — locked — finish the previous level first/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument()
-    // The pet reward system is disabled for now (REWARDS_ENABLED is false).
-    expect(screen.queryByRole('link', { name: /my pet/i })).not.toBeInTheDocument()
   })
 
   it('shows a Find in the Scene link only for unlocked levels that have scenes', async () => {
