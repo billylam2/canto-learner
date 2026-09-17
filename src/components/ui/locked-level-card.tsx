@@ -2,15 +2,12 @@ import { Card } from './card'
 
 interface LockedLevelCardProps {
   name: string
-  unlockThreshold?: number
 }
 
-export function LockedLevelCard({ name, unlockThreshold }: LockedLevelCardProps) {
+export function LockedLevelCard({ name }: LockedLevelCardProps) {
   return (
     <Card muted>
-      <span className="font-bold text-gray-500">
-        🔒 {name} — locked{unlockThreshold !== undefined && <> (unlocks at {unlockThreshold} stars)</>}
-      </span>
+      <span className="font-bold text-gray-500">🔒 {name} — locked — finish the previous level first</span>
     </Card>
   )
 }
