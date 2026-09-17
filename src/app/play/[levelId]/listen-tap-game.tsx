@@ -34,7 +34,25 @@ export function ListenTapGame({
   showResetGuestProgress = false,
 }: ListenTapGameProps) {
   const router = useRouter()
-  const rounds = useMemo(() => buildRounds(vocabItems), [vocabItems])
+
+  // Randomizing word order and answer choices with real Math.random() is
+  // only safe once mounted: this component is server-rendered then
+  // hydrated, and a true Math.random() call during that shared render pass
+  // would pick different results on the server vs. the client, causing a
+  // hydration mismatch between what's displayed and what each button's
+  // click handler is bound to. Before mount, everything falls back to the
+  // old deterministic/seeded order so the server and the first client
+  // render agree; real randomization takes over immediately after.
+  const [hasMounted, setHasMounted] = useState(false)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHasMounted(true)
+  }, [])
+
+  const rounds = useMemo(() => {
+    const orderedItems = hasMounted ? shuffleItems(vocabItems, Math.random) : vocabItems
+    return buildRounds(orderedItems)
+  }, [vocabItems, hasMounted])
 
   const [roundIndex, setRoundIndex] = useState(0)
   const [itemIndex, setItemIndex] = useState(0)
@@ -48,15 +66,10 @@ export function ListenTapGame({
 
   const choices = useMemo(() => {
     if (!currentItem) return []
-    // Seeded by the item id so the server-rendered HTML and the client's
-    // hydration render compute the identical order — a true Math.random()
-    // here would pick different distractors/order on each pass and cause a
-    // hydration mismatch between what's displayed and what each button's
-    // click handler is actually bound to.
-    const random = createSeededRandom(currentItem.id)
+    const random = hasMounted ? Math.random : createSeededRandom(currentItem.id)
     const distractors = pickDistractors(vocabItems, currentItem, 2, random)
     return shuffleItems([currentItem, ...distractors], random)
-  }, [currentItem, vocabItems])
+  }, [currentItem, vocabItems, hasMounted])
 
   // Reset the "missed" flag whenever the question changes, following React's
   // documented pattern for adjusting state during render instead of an Effect.

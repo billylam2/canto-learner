@@ -26,6 +26,10 @@ describe('ListenTapGame', () => {
     refreshMock.mockClear()
     window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) } as Response)
+    // Fisher-Yates with random() always returning ~1 leaves every element in
+    // place (j === i on each swap), so pre-existing tests that assume a
+    // fixed item/choice order keep working once real randomization lands.
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999)
   })
 
   it('does not show a log out button by default', () => {
@@ -150,5 +154,30 @@ describe('ListenTapGame', () => {
 
     await waitFor(() => expect(onLevelComplete).toHaveBeenCalledWith(3))
     expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it('randomizes the word order using real randomness instead of a fixed order', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    const items = [makeItem('a'), makeItem('b'), makeItem('c')]
+    render(<ListenTapGame levelId={1} levelName="Greetings" vocabItems={items} />)
+
+    // Fisher-Yates on [a, b, c] with random() always 0 produces [b, c, a] —
+    // proving the order is no longer the fixed input order.
+    await waitFor(() =>
+      expect(screen.getByTestId('prompt-audio')).toHaveAttribute('src', 'https://example.com/b.mp3')
+    )
+  })
+
+  it('re-randomizes answer choices for every question using real randomness', async () => {
+    const items = [makeItem('a'), makeItem('b'), makeItem('c'), makeItem('d')]
+    render(<ListenTapGame levelId={1} levelName="Greetings" vocabItems={items} />)
+
+    const randomSpy = vi.mocked(Math.random)
+    randomSpy.mockClear()
+
+    fireEvent.click(screen.getByTestId('a'))
+    await waitFor(() => expect(screen.getByTestId('b')).toBeInTheDocument())
+
+    expect(randomSpy).toHaveBeenCalled()
   })
 })
