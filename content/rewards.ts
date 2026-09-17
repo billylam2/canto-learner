@@ -12,6 +12,12 @@ export interface AccessorySource {
   widthPercent: number
 }
 
+// Turn this on once the pet reward system is ready for kids to see. It gates
+// the "My Pet" nav links (level-select pages) and the /pet route itself
+// (which redirects to /play while disabled) — nothing else needs to change
+// to bring the feature back.
+export const REWARDS_ENABLED = false
+
 export const PET: PetSource = { slug: 'fox', name: 'Fox' }
 
 export const ACCESSORIES: AccessorySource[] = [

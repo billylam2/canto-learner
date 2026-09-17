@@ -1,11 +1,12 @@
 import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { readSessionFromCookieValue, COOKIE_NAME } from '@/lib/auth/session'
 import { createSupabaseServerClient } from '@/lib/supabase/client'
 import { getProgressForKid } from '@/lib/db/progress'
 import { getAccessoriesForKid } from '@/lib/db/accessories'
 import { computeLifetimeStars } from '@/lib/game/level-status'
-import { PET, ACCESSORIES } from '../../../content/rewards'
+import { PET, ACCESSORIES, REWARDS_ENABLED } from '../../../content/rewards'
 import { PetShop } from '@/components/pet-shop'
 import { GuestPetPage } from '../guest-pet-page'
 
@@ -20,6 +21,10 @@ function resolveImageUrls(supabase: SupabaseClient) {
 }
 
 export default async function PetPage() {
+  if (!REWARDS_ENABLED) {
+    redirect('/play')
+  }
+
   const cookieStore = await cookies()
   const session = await readSessionFromCookieValue(cookieStore.get(COOKIE_NAME)?.value)
   const supabase = createSupabaseServerClient()
