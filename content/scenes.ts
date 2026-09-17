@@ -45,8 +45,7 @@ export const SCENES: SceneSource[] = [
 // Hotspot coordinates were authored by generating each scene image and
 // visually inspecting it (see scripts/generate-scenes.ts and
 // scripts/render-scene-debug.ts) — they cannot be known before the raster
-// image exists. Re-authored 2026-09-16 for the Pixar-style regeneration
-// (scene-colors-balloons excluded — see note below).
+// image exists.
 export const SCENE_OBJECTS: SceneObjectSource[] = [
   // scene-dog-cat: big brown dog on the left facing right, small orange cat on the right
   { sceneSlug: 'scene-dog-cat', vocabSlug: 'dog', xPercent: 8, yPercent: 25, widthPercent: 52, heightPercent: 60 },
