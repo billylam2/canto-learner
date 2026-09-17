@@ -115,7 +115,7 @@ export function SceneGame({
     return (
       <div className="min-h-screen bg-brand-bg">
         <Header showBackLink showLogout={showLogout} showResetGuestProgress={showResetGuestProgress} />
-        <main className="max-w-md mx-auto p-4">
+        <main className="max-w-md sm:max-w-lg lg:max-w-2xl mx-auto p-4">
           <Card className="flex flex-col items-center gap-4 text-center">
             <h1 className="text-2xl font-extrabold text-brand-ink">Level complete!</h1>
             <p className="text-brand-ink font-bold">You earned {starsEarned} stars.</p>
@@ -133,7 +133,7 @@ export function SceneGame({
   return (
     <div className="min-h-screen bg-brand-bg">
       <Header showBackLink showLogout={showLogout} showResetGuestProgress={showResetGuestProgress} />
-      <main className="max-w-2xl mx-auto p-4">
+      <main className="max-w-2xl lg:max-w-4xl mx-auto p-4">
         <Card className="flex flex-col items-center gap-4">
           <h1 className="text-2xl font-extrabold text-brand-ink">{levelName}</h1>
           <p className="bg-brand-secondary text-white font-bold rounded-full px-4 py-1 inline-block">

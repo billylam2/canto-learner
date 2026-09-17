@@ -23,7 +23,7 @@ export default async function PlayPage() {
   return (
     <div className="min-h-screen bg-brand-bg">
       <Header showLogout />
-      <main className="max-w-3xl mx-auto p-4">
+      <main className="max-w-3xl lg:max-w-5xl mx-auto p-4">
         <h1 className="text-3xl font-extrabold text-brand-ink mb-4">Choose a level</h1>
         <LevelList levels={levels} />
       </main>

@@ -130,7 +130,7 @@ export function ListenTapGame({
     return (
       <div className="min-h-screen bg-brand-bg">
         <Header showBackLink showLogout={showLogout} showResetGuestProgress={showResetGuestProgress} />
-        <main className="max-w-md mx-auto p-4">
+        <main className="max-w-md sm:max-w-lg lg:max-w-2xl mx-auto p-4">
           <Card className="flex flex-col items-center gap-4 text-center">
             <h1 className="text-2xl font-extrabold text-brand-ink">Level complete!</h1>
             <p className="text-brand-ink font-bold">You earned {starsEarned} stars.</p>
@@ -148,7 +148,7 @@ export function ListenTapGame({
   return (
     <div className="min-h-screen bg-brand-bg">
       <Header showBackLink showLogout={showLogout} showResetGuestProgress={showResetGuestProgress} />
-      <main className="max-w-md mx-auto p-4">
+      <main className="max-w-md sm:max-w-lg lg:max-w-2xl mx-auto p-4">
         <Card className="flex flex-col items-center gap-4">
           <h1 className="text-2xl font-extrabold text-brand-ink">{levelName}</h1>
           <p className="bg-brand-secondary text-white font-bold rounded-full px-4 py-1 inline-block">
@@ -168,7 +168,13 @@ export function ListenTapGame({
                 className="border-4 border-brand-ink rounded-[16px] bg-white p-2 shadow-[4px_4px_0_0_#1A1A1A] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#1A1A1A] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- small externally-hosted SVG icons, not a Next/Image optimization candidate */}
-                <img src={choice.imageUrl} alt="" width={120} height={120} className="rounded-[10px]" />
+                <img
+                  src={choice.imageUrl}
+                  alt=""
+                  width={120}
+                  height={120}
+                  className="rounded-[10px] w-[120px] h-[120px] sm:w-[150px] sm:h-[150px] lg:w-[180px] lg:h-[180px]"
+                />
               </button>
             ))}
           </div>

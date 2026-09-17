@@ -21,7 +21,7 @@ export function GuestPlayPage() {
   return (
     <div className="min-h-screen bg-brand-bg">
       <Header showResetGuestProgress />
-      <main className="max-w-3xl mx-auto p-4">
+      <main className="max-w-3xl lg:max-w-5xl mx-auto p-4">
         <h1 className="text-3xl font-extrabold text-brand-ink mb-4">Choose a level</h1>
         {levels ? <LevelList levels={levels} /> : <p>Loading...</p>}
       </main>
