@@ -18,7 +18,10 @@ async function main() {
     vocabIdBySlug.set(row.slug, row.id)
   }
 
-  for (const scene of SCENES) {
+  const requestedSlugs = process.argv.slice(2)
+  const scenes = requestedSlugs.length > 0 ? SCENES.filter((scene) => requestedSlugs.includes(scene.slug)) : SCENES
+
+  for (const scene of scenes) {
     const imagePath = path.join(process.cwd(), 'content', 'images', 'scenes', `${scene.slug}.png`)
     const imageBuffer = readFileSync(imagePath)
     const imageUrl = await uploadAsset(supabase, 'scene-images', `${scene.slug}.png`, imageBuffer, 'image/png')
@@ -49,7 +52,7 @@ async function main() {
     console.log(`Synced scene: ${scene.slug} (${objects.length} objects)`)
   }
 
-  console.log(`Done. Synced ${SCENES.length} scenes.`)
+  console.log(`Done. Synced ${scenes.length} scenes.`)
 }
 
 main().catch((error) => {
