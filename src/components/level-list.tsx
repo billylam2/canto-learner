@@ -2,8 +2,8 @@ import type { LevelStatus } from '@/lib/game/level-status'
 import { Card } from '@/components/ui/card'
 import { LockedLevelCard } from '@/components/ui/locked-level-card'
 import { StarRating } from '@/components/ui/star-rating'
-import { LinkButton } from '@/components/ui/button'
-import { LEVELS, VOCAB_ITEMS } from '../../content/vocab'
+import { LinkButton, Button } from '@/components/ui/button'
+import { VOCAB_ITEMS } from '../../content/vocab'
 import { SCENES } from '../../content/scenes'
 
 const STARS_PER_ITEM = 3
@@ -14,8 +14,6 @@ const MAX_STARS_BY_LEVEL = new Map<number, number>()
 for (const item of VOCAB_ITEMS) {
   MAX_STARS_BY_LEVEL.set(item.level, (MAX_STARS_BY_LEVEL.get(item.level) ?? 0) + STARS_PER_ITEM)
 }
-
-const UNLOCK_THRESHOLD_BY_LEVEL = new Map(LEVELS.map((level) => [level.id, level.unlockThreshold]))
 
 interface LevelListProps {
   levels: LevelStatus[]
@@ -32,19 +30,27 @@ export function LevelList({ levels }: LevelListProps) {
                 <span className="text-xl font-extrabold text-brand-ink">{level.name} —</span>
                 <StarRating stars={level.starsEarned} maxStars={MAX_STARS_BY_LEVEL.get(level.id)} />
               </div>
-              <div className="flex flex-wrap gap-2 mt-1">
+              <div className="flex flex-wrap items-center gap-2 mt-1">
                 <LinkButton href={`/play/${level.id}`} variant="primary">
                   Listen &amp; Tap
                 </LinkButton>
-                {LEVEL_IDS_WITH_SCENES.has(level.id) && (
-                  <LinkButton href={`/play/${level.id}/scene`} variant="secondary">
-                    Find in the Scene
-                  </LinkButton>
-                )}
+                {LEVEL_IDS_WITH_SCENES.has(level.id) &&
+                  (level.sceneUnlocked ? (
+                    <LinkButton href={`/play/${level.id}/scene`} variant="secondary">
+                      Find in the Scene
+                    </LinkButton>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Button variant="secondary" disabled>
+                        Find in the Scene
+                      </Button>
+                      <span className="text-sm text-gray-500">Finish Listen &amp; Tap first</span>
+                    </span>
+                  ))}
               </div>
             </Card>
           ) : (
-            <LockedLevelCard name={level.name} unlockThreshold={UNLOCK_THRESHOLD_BY_LEVEL.get(level.id)} />
+            <LockedLevelCard name={level.name} />
           )}
         </li>
       ))}
