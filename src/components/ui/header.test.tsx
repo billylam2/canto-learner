@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const pushMock = vi.fn()
 const refreshMock = vi.fn()
 const clearGuestProgressMock = vi.hoisted(() => vi.fn())
+const clearGuestAccessoriesMock = vi.hoisted(() => vi.fn())
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock, refresh: refreshMock }),
@@ -13,6 +14,10 @@ vi.mock('@/lib/guest/progress', () => ({
   clearGuestProgress: clearGuestProgressMock,
 }))
 
+vi.mock('@/lib/guest/accessories', () => ({
+  clearGuestAccessories: clearGuestAccessoriesMock,
+}))
+
 import { Header } from './header'
 
 describe('Header', () => {
@@ -20,6 +25,7 @@ describe('Header', () => {
     pushMock.mockClear()
     refreshMock.mockClear()
     clearGuestProgressMock.mockClear()
+    clearGuestAccessoriesMock.mockClear()
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) } as Response)
   })
 
@@ -61,6 +67,7 @@ describe('Header', () => {
     fireEvent.click(screen.getByRole('button', { name: /reset progress/i }))
 
     expect(clearGuestProgressMock).toHaveBeenCalled()
+    expect(clearGuestAccessoriesMock).toHaveBeenCalled()
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/'))
     expect(refreshMock).toHaveBeenCalled()
   })

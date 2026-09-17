@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { clearGuestProgress } from '@/lib/guest/progress'
+import { clearGuestAccessories } from '@/lib/guest/accessories'
 
 interface HeaderProps {
   showBackLink?: boolean
@@ -21,6 +22,7 @@ export function Header({ showBackLink = false, showLogout = false, showResetGues
 
   function handleResetGuestProgress() {
     clearGuestProgress()
+    clearGuestAccessories()
     router.push('/')
     router.refresh()
   }
