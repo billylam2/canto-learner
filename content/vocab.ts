@@ -28,11 +28,11 @@ export const LEVELS: LevelSource[] = [
 
 export const VOCAB_ITEMS: VocabSourceItem[] = [
   // Level 1: Greetings
-  { slug: 'hello', category: 'greetings', level: 1, cantonese: '你好', jyutping: 'nei5 hou2', englishGloss: 'hello', description: 'two cartoon people facing each other and waving hello' },
-  { slug: 'hello-everyone', category: 'greetings', level: 1, cantonese: '大家好', jyutping: 'daai6 gaa1 hou2', englishGloss: 'hello everyone', description: 'three cartoon friends waving hello together' },
+  { slug: 'hello', category: 'greetings', level: 1, cantonese: '你好', jyutping: 'nei5 hou2', englishGloss: 'hello', description: 'two cartoon human children standing face to face, turned toward each other and looking directly at each other, both waving hello' },
+  { slug: 'hello-everyone', category: 'greetings', level: 1, cantonese: '大家好', jyutping: 'daai6 gaa1 hou2', englishGloss: 'hello everyone', description: 'three human cartoon children standing together, all waving hello' },
   { slug: 'good-morning', category: 'greetings', level: 1, cantonese: '早晨', jyutping: 'zou2 san4', englishGloss: 'good morning', description: 'a cartoon kid sitting up in bed, looking sleepy, waving, with warm bright sunlight streaming into the room' },
   { slug: 'good-evening', category: 'greetings', level: 1, cantonese: '晚安', jyutping: 'maan5 on1', englishGloss: 'good evening', description: 'a cartoon kid looking sleepy in bed, waving, in a dark room lit only by a soft nightlight glow' },
-  { slug: 'goodbye', category: 'greetings', level: 1, cantonese: '拜拜', jyutping: 'baai1 baai3', englishGloss: 'goodbye', description: 'two cartoon people walking away from each other, waving goodbye over their shoulders' },
+  { slug: 'goodbye', category: 'greetings', level: 1, cantonese: '拜拜', jyutping: 'baai1 baai3', englishGloss: 'goodbye', description: 'two cartoon people walking away from each other in opposite directions, each with their body turned slightly back toward the other, looking back over their shoulder and waving goodbye' },
   { slug: 'thank-you', category: 'greetings', level: 1, cantonese: '唔該', jyutping: 'm4 goi1', englishGloss: 'thank you', description: 'a cartoon teacher receiving a bouquet of flowers and clasping her hands together with joy' },
   { slug: 'excuse-me', category: 'greetings', level: 1, cantonese: '唔好意思', jyutping: 'm4 hou2 ji3 si1', englishGloss: 'excuse me', description: 'a cartoon kid politely trying to get the attention of an adult teacher who is reading a book and not noticing them' },
   { slug: 'sorry', category: 'greetings', level: 1, cantonese: '對唔住', jyutping: 'deoi3 m4 zyu6', englishGloss: 'sorry', description: 'a cartoon kid standing next to a broken vase on the floor, looking sad and apologetic' },
