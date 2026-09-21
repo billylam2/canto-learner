@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
 
 vi.mock('./spawn-process', () => ({
@@ -60,15 +60,80 @@ vi.mock('@google-cloud/speech', () => ({
   SpeechClient: vi.fn(),
 }))
 
-import { readFile } from './fs-process'
-import { SpeechClient } from '@google-cloud/speech'
-import { transcribeWithDiarization } from './transcribe'
+const mockUpload = vi.fn()
+const mockDelete = vi.fn()
+const mockFile = vi.fn(() => ({ delete: mockDelete }))
+const mockBucket = vi.fn(() => ({ upload: mockUpload, file: mockFile }))
 
-describe('transcribeWithDiarization', () => {
+vi.mock('@google-cloud/storage', () => ({
+  Storage: vi.fn(),
+}))
+
+import { SpeechClient } from '@google-cloud/speech'
+import { Storage } from '@google-cloud/storage'
+import { transcribeWithDiarization, uploadToGcs, deleteFromGcs } from './transcribe'
+
+describe('uploadToGcs', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('uploads the file to the given bucket and returns a gs:// uri', async () => {
+    mockUpload.mockResolvedValue(undefined)
+    vi.mocked(Storage).mockImplementation(function StorageMock() {
+      return { bucket: mockBucket } as never
+    })
+
+    const uri = await uploadToGcs('/tmp/audio.mp3', 'my-bucket')
+
+    expect(mockBucket).toHaveBeenCalledWith('my-bucket')
+    expect(mockUpload).toHaveBeenCalledWith('/tmp/audio.mp3', expect.objectContaining({ destination: expect.any(String) }))
+    expect(uri).toMatch(/^gs:\/\/my-bucket\/.+\.mp3$/)
+  })
+})
+
+describe('deleteFromGcs', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('deletes the object referenced by a gs:// uri', async () => {
+    mockDelete.mockResolvedValue(undefined)
+    vi.mocked(Storage).mockImplementation(function StorageMock() {
+      return { bucket: mockBucket } as never
+    })
+
+    await deleteFromGcs('gs://my-bucket/dub-sync/audio-123.mp3')
+
+    expect(mockBucket).toHaveBeenCalledWith('my-bucket')
+    expect(mockFile).toHaveBeenCalledWith('dub-sync/audio-123.mp3')
+    expect(mockDelete).toHaveBeenCalled()
+  })
+
+  it('swallows errors from a failed delete', async () => {
+    mockDelete.mockRejectedValue(new Error('not found'))
+    vi.mocked(Storage).mockImplementation(function StorageMock() {
+      return { bucket: mockBucket } as never
+    })
+
+    await expect(deleteFromGcs('gs://my-bucket/dub-sync/audio-123.mp3')).resolves.toBeUndefined()
+  })
+})
+
+describe('transcribeWithDiarization', () => {
+  const originalBucketEnv = process.env.DUB_SYNC_GCS_BUCKET
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    process.env.DUB_SYNC_GCS_BUCKET = 'my-bucket'
+  })
+
+  afterEach(() => {
+    process.env.DUB_SYNC_GCS_BUCKET = originalBucketEnv
+  })
+
   it('extracts words with timestamps and speaker tags from the final diarized result', async () => {
-    vi.mocked(readFile).mockResolvedValue(Buffer.from('fake-audio'))
+    mockUpload.mockResolvedValue(undefined)
+    mockDelete.mockResolvedValue(undefined)
+    vi.mocked(Storage).mockImplementation(function StorageMock() {
+      return { bucket: mockBucket } as never
+    })
 
     const fakeOperation = {
       promise: vi.fn().mockResolvedValue([
@@ -99,8 +164,9 @@ describe('transcribeWithDiarization', () => {
         },
       ]),
     }
+    const longRunningRecognize = vi.fn().mockResolvedValue([fakeOperation])
     vi.mocked(SpeechClient).mockImplementation(function SpeechClientMock() {
-      return { longRunningRecognize: vi.fn().mockResolvedValue([fakeOperation]) } as never
+      return { longRunningRecognize } as never
     })
 
     const words = await transcribeWithDiarization('/tmp/audio.mp3', 'yue-Hant-HK')
@@ -109,10 +175,19 @@ describe('transcribeWithDiarization', () => {
       { text: '你好', startTime: 0, endTime: 0.5, speakerTag: 1 },
       { text: '喬治', startTime: 1, endTime: 1.5, speakerTag: 2 },
     ])
+    expect(mockUpload).toHaveBeenCalledWith('/tmp/audio.mp3', expect.objectContaining({ destination: expect.any(String) }))
+    expect(longRunningRecognize).toHaveBeenCalledWith(
+      expect.objectContaining({ audio: { uri: expect.stringMatching(/^gs:\/\/my-bucket\/.+\.mp3$/) } })
+    )
+    expect(mockDelete).toHaveBeenCalled()
   })
 
   it('returns an empty array when there are no results', async () => {
-    vi.mocked(readFile).mockResolvedValue(Buffer.from('fake-audio'))
+    mockUpload.mockResolvedValue(undefined)
+    mockDelete.mockResolvedValue(undefined)
+    vi.mocked(Storage).mockImplementation(function StorageMock() {
+      return { bucket: mockBucket } as never
+    })
     const fakeOperation = { promise: vi.fn().mockResolvedValue([{ results: [] }]) }
     vi.mocked(SpeechClient).mockImplementation(function SpeechClientMock() {
       return { longRunningRecognize: vi.fn().mockResolvedValue([fakeOperation]) } as never
@@ -120,5 +195,25 @@ describe('transcribeWithDiarization', () => {
 
     const words = await transcribeWithDiarization('/tmp/audio.mp3', 'en-US')
     expect(words).toEqual([])
+  })
+
+  it('deletes the uploaded gcs object even when recognition fails', async () => {
+    mockUpload.mockResolvedValue(undefined)
+    mockDelete.mockResolvedValue(undefined)
+    vi.mocked(Storage).mockImplementation(function StorageMock() {
+      return { bucket: mockBucket } as never
+    })
+    vi.mocked(SpeechClient).mockImplementation(function SpeechClientMock() {
+      return { longRunningRecognize: vi.fn().mockRejectedValue(new Error('recognize failed')) } as never
+    })
+
+    await expect(transcribeWithDiarization('/tmp/audio.mp3', 'en-US')).rejects.toThrow('recognize failed')
+    expect(mockDelete).toHaveBeenCalled()
+  })
+
+  it('throws a clear error when DUB_SYNC_GCS_BUCKET is not set', async () => {
+    delete process.env.DUB_SYNC_GCS_BUCKET
+
+    await expect(transcribeWithDiarization('/tmp/audio.mp3', 'en-US')).rejects.toThrow('DUB_SYNC_GCS_BUCKET')
   })
 })
