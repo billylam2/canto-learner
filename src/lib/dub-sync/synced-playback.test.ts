@@ -23,4 +23,11 @@ describe('computeResyncTarget', () => {
     expect(computeResyncTarget(60, 121, anchors, 0.5)).toBe(120)
     expect(computeResyncTarget(60, 120.4, anchors, 0.5)).toBeNull()
   })
+
+  it('returns null instead of throwing when the anchors are momentarily out of order', () => {
+    // e.g. mid-edit, after only one of the two content-end anchors has been re-marked. This runs
+    // on a timer during synced playback, so it must never throw into an unhandled interval tick.
+    const invertedAnchors: EpisodeAnchors = { ...anchors, cantoContentEnd: 5 }
+    expect(computeResyncTarget(60, 120, invertedAnchors)).toBeNull()
+  })
 })
