@@ -6,8 +6,8 @@ The dub-sync editor currently requires every segment to be marked by hand, and "
 
 ## Decisions
 
-- **Transcription pipeline**: download the Cantonese video's audio temporarily via `yt-dlp` (a CLI tool, not an npm package — must be installed wherever the Next.js server runs), send it to Google Cloud Speech-to-Text with `languageCode: 'yue-Hant-HK'` and speaker diarization enabled, group consecutive words by speaker tag into segments, and delete the audio file immediately after. Nothing about the audio is kept or served — only the resulting timestamps are saved.
-- **English alignment stays proportional**: segment English `[start, end]` times are still computed via the existing `englishTimeFor` linear-normalization formula, not a second transcription pass on the English video. This keeps the pipeline to one transcription call per episode; revisit only if accuracy remains a problem after this change.
+- **Transcription pipeline runs on both videos**: download both the Cantonese and English videos' audio temporarily via `yt-dlp` (a CLI tool, not an npm package — must be installed wherever the Next.js server runs), send each to Google Cloud Speech-to-Text with speaker diarization enabled (`languageCode: 'yue-Hant-HK'` for Cantonese, `'en-US'` for English), group each side's consecutive words by speaker tag into turns, and delete both audio files immediately after. Nothing about the audio is kept or served — only the resulting timestamps are saved. Doubling the transcription calls roughly doubles the per-episode Speech-to-Text cost, which is still on the order of cents for a several-minute video — not a meaningful concern for personal use.
+- **Pairing strategy**: if the two sides produce the same number of speaker turns (within their respective content anchors), pair them 1:1 by order — both `cantoStart`/`cantoEnd` and `englishStart`/`englishEnd` come from real transcribed timestamps. If the counts differ (dub lines merged/split, diarization noise), fall back to the existing `englishTimeFor` proportional-stretch formula for English timing on that episode's Cantonese turns, and surface a warning in the auto-mark response (shown in the admin page) so it's clear that episode's English timing is approximate rather than silently accepting lower-quality output.
 - **Trigger**: a single button ("Auto-mark from speech") on the admin page runs the entire pipeline server-side in one request — no separate CLI commands for the user to run.
 - **Admin auth**: a single shared password in a new `DUB_SYNC_ADMIN_PASSWORD` env var, checked by a new login route, backed by an `iron-session` cookie (mirroring the existing kids'-app session pattern in `src/lib/auth/session.ts`, but a distinct cookie/session, reusing the existing `SESSION_SECRET`). No accounts, no email — this is a personal single-operator tool.
 - **Gate scope**: everything that creates or edits content (episode list/creation, anchors, auto-mark, segment table) lives behind the login. The player (`/dub-sync/[episodeId]`) stays fully open, since it's what gets used casually on any device.
@@ -46,12 +46,12 @@ export interface TranscribedWord {
 }
 
 export async function downloadAudio(videoId: string): Promise<string> // returns a temp file path
-export async function transcribeWithDiarization(audioFilePath: string): Promise<TranscribedWord[]>
+export async function transcribeWithDiarization(audioFilePath: string, languageCode: string): Promise<TranscribedWord[]>
 export function deleteAudioFile(path: string): Promise<void>
 ```
 
 - `downloadAudio` shells out to `yt-dlp -x --audio-format mp3 -o <tmp>/%(id)s.%(ext)s https://www.youtube.com/watch?v=<videoId>` via Node's `child_process`, writing into `os.tmpdir()`. Throws a clear error (surfaced to the admin page) if `yt-dlp` isn't found on `PATH`.
-- `transcribeWithDiarization` uses `@google-cloud/speech` (new dependency; auth via Application Default Credentials, same pattern as `createTtsClient()` in `src/lib/content/tts.ts` — no explicit key handling in code). Uses `longRunningRecognize` (required for audio over ~1 minute) with `enableSpeakerDiarization: true`, a `diarizationConfig` of `{ minSpeakerCount: 2, maxSpeakerCount: 6 }` (reasonable default for a kids' show's cast; not user-configurable in this first pass), and `enableWordTimeOffsets: true`. Flattens the response into `TranscribedWord[]`.
+- `transcribeWithDiarization(audioFilePath, languageCode)` uses `@google-cloud/speech` (new dependency; auth via Application Default Credentials, same pattern as `createTtsClient()` in `src/lib/content/tts.ts` — no explicit key handling in code). Uses `longRunningRecognize` (required for audio over ~1 minute) with the given `languageCode`, `enableSpeakerDiarization: true`, a `diarizationConfig` of `{ minSpeakerCount: 2, maxSpeakerCount: 6 }` (reasonable default for a kids' show's cast; not user-configurable in this first pass), and `enableWordTimeOffsets: true`. Flattens the response into `TranscribedWord[]`.
 
 New pure module `src/lib/dub-sync/group-words-by-speaker.ts`:
 
@@ -67,15 +67,37 @@ Walks the word list in order; a change in `speakerTag` between consecutive words
 
 `WordGroup` (`{start, end}`) is a subset of `CaptionCue` (`{start, end, text}`) — and `cuesToCandidateSegments` never reads `.text`, only `.start`/`.end`. Rather than duplicate its anchor-filtering + `englishTimeFor` mapping logic for word groups, its parameter type is loosened from `CaptionCue[]` to a minimal local `{ start: number; end: number }[]` interface, so `WordGroup[]` satisfies it directly. `CaptionCue[]` callers (the existing generate-segments route) keep working unchanged, since `CaptionCue` still structurally satisfies the loosened type.
 
+New pure module `src/lib/dub-sync/pair-diarized-turns.ts`:
+
+```ts
+export interface DiarizedSegment {
+  cantoStart: number
+  cantoEnd: number
+  englishStart: number
+  englishEnd: number
+}
+export interface PairDiarizedTurnsResult {
+  segments: DiarizedSegment[]
+  usedFallback: boolean
+}
+export function pairDiarizedTurns(
+  cantoTurns: WordGroup[],
+  englishTurns: WordGroup[],
+  anchors: EpisodeAnchors
+): PairDiarizedTurnsResult
+```
+
+Filters `cantoTurns` to `[cantoContentStart, cantoContentEnd]` and `englishTurns` to `[englishContentStart, englishContentEnd]`. If both filtered lists are non-empty and the same length, zips them index-by-index — `englishStart`/`englishEnd` come directly from the matching English turn, not from `englishTimeFor` — and returns `usedFallback: false`. Otherwise, falls back to `cuesToCandidateSegments(cantoTurns, anchors)` (which does its own filtering + proportional English-time mapping) and returns `usedFallback: true`.
+
 **`POST /api/dub-sync/episodes/[episodeId]/auto-mark`** (admin-only):
 1. Require admin session (401 if missing).
 2. Fetch the episode; 404 if missing, 400 if anchors aren't fully set (same check as the existing generate-segments route).
-3. `downloadAudio(episode.cantoneseVideoId)` → `transcribeWithDiarization(path)` → `groupWordsBySpeaker(words)`, each step's failure returning a `502` with a message identifying which step failed (download vs. transcription).
-4. Reuse `cuesToCandidateSegments`-style filtering/mapping (word groups have the same `{start, end}` shape captions cues do, so this can call the same anchor-filter-and-normalize logic, exposed as a small shared helper rather than duplicated) to produce `CreateSegmentInput[]`.
-5. `createSegmentsBulk`, then delete the temp audio file in a `finally` block so cleanup happens even on error.
-6. Returns `{ segments }` (201) on success.
+3. In parallel (`Promise.all`), for each of `episode.cantoneseVideoId` (with `'yue-Hant-HK'`) and `episode.englishVideoId` (with `'en-US'`): `downloadAudio(videoId)` → `transcribeWithDiarization(path, languageCode)` → `groupWordsBySpeaker(words)`. Any step's failure on either side returns a `502` with a message identifying which video/step failed.
+4. `pairDiarizedTurns(cantoTurns, englishTurns, anchors)` to produce `CreateSegmentInput[]` and the fallback flag.
+5. `createSegmentsBulk`, then delete both temp audio files in a `finally` block so cleanup happens even on error.
+6. Returns `{ segments, warning }` (201) on success — `warning` is present (a human-readable string naming the turn-count mismatch) only when `usedFallback` was true, absent otherwise.
 
-Because a 5-minute video's download + transcription can take tens of seconds, the admin page shows a "Working…" state on the button (disabled, spinner or text change) for the duration of the request rather than looking frozen.
+Because a 5-minute video's download + transcription (now for two videos, run in parallel) can take tens of seconds, the admin page shows a "Working…" state on the button (disabled, spinner or text change) for the duration of the request rather than looking frozen.
 
 ## Admin page (`/dub-sync/admin`)
 
@@ -86,7 +108,7 @@ Client component (`admin.tsx`) holds `selectedEpisodeId` state:
 - **Add episode**: the existing `NewEpisodeForm`, adapted to append the created episode to local state and select it, instead of redirecting to a now-removed editor route.
 - **Selected episode's panel**, top to bottom:
   - Anchor controls (unchanged from the current editor: two video embeds, "Mark content start/end" per video).
-  - **"Auto-mark from speech"** button — calls the new auto-mark route, appends returned segments to local state, shows the "Working…" state described above, and surfaces the route's error message inline on failure (e.g. "yt-dlp not found" or a transcription failure).
+  - **"Auto-mark from speech"** button — calls the new auto-mark route, appends returned segments to local state, shows the "Working…" state described above, surfaces the route's error message inline on failure (e.g. "yt-dlp not found" or a transcription failure), and shows the response's `warning` (if present) as a distinct, non-error inline notice — the segments are still created, just with proportional-fallback English timing for that batch.
   - **Segment table**: one row per segment — label, Cantonese start/end, English start/end, each as a number/text input that PATCHes that segment on blur (no separate "Edit mode" toggle, unlike the old editor's per-row edit affordance) — plus a Delete button per row.
   - **Manual add**: the existing "Mark start / Mark end / Save segment" flow (scrub the Cantonese video by hand), kept as-is underneath the table, for filling in anything auto-mark misses.
 
@@ -100,14 +122,15 @@ Client component (`admin.tsx`) holds `selectedEpisodeId` state:
 
 - Missing `DUB_SYNC_ADMIN_PASSWORD` at login time throws the same style of clear startup error as `getSessionPassword()` — not a silent failure.
 - `yt-dlp` not installed/found: the auto-mark route returns a `502` with a message telling the admin to install it, surfaced verbatim in the admin page's error banner.
-- Speech-to-Text failures (quota, unsupported audio, network) similarly return `502` with the underlying error message.
+- Speech-to-Text failures (quota, unsupported audio, network) similarly return `502` with the underlying error message, naming which video (Cantonese/English) failed.
+- Cantonese/English turn-count mismatch: not an error — segments are still created via the proportional fallback, with a `warning` surfaced as a distinct (non-red) inline notice rather than blocking anything.
 - Anchors not set: `400`, same as today's generate-segments route — the admin page's "Auto-mark from speech" button is disabled until anchors exist, same pattern as "Generate from captions" was disabled before.
 - Segment table field edits that fail to save (network error, validation) leave the field showing the value the user typed with an inline error rather than silently reverting — avoids losing an edit.
 
 ## Testing approach
 
-- Unit tests for `groupWordsBySpeaker` (speaker-tag change detection, single-speaker input, empty input) and for the admin-session module (mirroring `session.test.ts`'s coverage of `session.ts`).
-- Unit tests for the auto-mark route with `downloadAudio`/`transcribeWithDiarization` mocked (following this repo's `vi.mock` convention for the DB layer), covering: success, missing anchors, episode not found, download failure, transcription failure, and the temp-file-cleanup-on-error path.
+- Unit tests for `groupWordsBySpeaker` (speaker-tag change detection, single-speaker input, empty input), `pairDiarizedTurns` (matching counts → direct pairing with `usedFallback: false`; mismatched counts → proportional fallback with `usedFallback: true`; empty input), and the admin-session module (mirroring `session.test.ts`'s coverage of `session.ts`).
+- Unit tests for the auto-mark route with `downloadAudio`/`transcribeWithDiarization` mocked (following this repo's `vi.mock` convention for the DB layer), covering: success (matched counts, no warning), success with fallback (mismatched counts, warning present), missing anchors, episode not found, download failure on either video, transcription failure on either video, and the temp-file-cleanup-on-error path (both files removed even when one side fails).
 - Unit tests for the login/logout routes and for `requireAdminSession` gating an existing route (e.g. segment creation) when the admin cookie is absent.
 - Component tests for the admin page's episode switcher, segment table inline editing, and auto-mark button's loading/error states, following the existing `player.test.tsx`/`editor.test.tsx` mocking patterns.
 - No automated test can exercise the real `yt-dlp` + Speech-to-Text call end-to-end — that's covered by a manual QA pass (run auto-mark against a real episode, confirm segments appear and look reasonable, confirm the temp file is gone afterward).
