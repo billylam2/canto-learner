@@ -16,3 +16,15 @@ export function englishTimeFor(cantoT: number, anchors: EpisodeAnchors): number 
   const ratio = (cantoT - cantoContentStart) / cantoSpan
   return englishContentStart + ratio * (englishContentEnd - englishContentStart)
 }
+
+export function cantoTimeFor(englishT: number, anchors: EpisodeAnchors): number {
+  const { cantoContentStart, cantoContentEnd, englishContentStart, englishContentEnd } = anchors
+  const englishSpan = englishContentEnd - englishContentStart
+
+  if (englishSpan <= 0) {
+    throw new Error('Invalid anchors: englishContentEnd must be after englishContentStart')
+  }
+
+  const ratio = (englishT - englishContentStart) / englishSpan
+  return cantoContentStart + ratio * (cantoContentEnd - cantoContentStart)
+}

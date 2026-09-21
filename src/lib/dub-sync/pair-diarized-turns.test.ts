@@ -46,25 +46,31 @@ describe('pairDiarizedTurns', () => {
     expect(result.segments).toEqual([{ cantoStart: 10, cantoEnd: 15, englishStart: 21, englishEnd: 27 }])
   })
 
-  it('falls back to proportional stretch when the turn counts differ', () => {
-    const cantoTurns: WordGroup[] = [
-      { start: 10, end: 15 },
-      { start: 20, end: 25 },
+  it('falls back to english-turn boundaries proportionally mapped to canto, when the turn counts differ', () => {
+    // Speaker diarization isn't supported for every canto language (e.g. Cantonese), so a
+    // diarized-turn-count mismatch usually means canto's turns are unusable (often just one giant
+    // blob) while english's are real. Prefer english's boundaries as the reference in that case,
+    // rather than the old behavior of trusting canto's (likely degenerate) turns.
+    const cantoTurns: WordGroup[] = [{ start: 10, end: 110 }] // one giant undiarized blob
+    const englishTurns: WordGroup[] = [
+      { start: 20, end: 30 },
+      { start: 120, end: 130 },
     ]
-    const englishTurns: WordGroup[] = [{ start: 21, end: 27 }]
 
     const result = pairDiarizedTurns(cantoTurns, englishTurns, anchors)
 
     expect(result.usedFallback).toBe(true)
-    expect(result.segments).toHaveLength(2)
-    // englishStart/englishEnd come from englishTimeFor, not from the (mismatched) englishTurns
-    expect(result.segments[0]).toEqual({ cantoStart: 10, cantoEnd: 15, englishStart: 20, englishEnd: 30 })
+    // cantoStart/cantoEnd come from cantoTimeFor, not from the (mismatched) cantoTurns
+    expect(result.segments).toEqual([
+      { cantoStart: 10, cantoEnd: 15, englishStart: 20, englishEnd: 30 },
+      { cantoStart: 60, cantoEnd: 65, englishStart: 120, englishEnd: 130 },
+    ])
   })
 
-  it('falls back when one side has no turns at all', () => {
+  it('falls back to canto-turn boundaries when english has no usable turns either', () => {
     const cantoTurns: WordGroup[] = [{ start: 10, end: 15 }]
     const result = pairDiarizedTurns(cantoTurns, [], anchors)
     expect(result.usedFallback).toBe(true)
-    expect(result.segments).toHaveLength(1)
+    expect(result.segments).toEqual([{ cantoStart: 10, cantoEnd: 15, englishStart: 20, englishEnd: 30 }])
   })
 })

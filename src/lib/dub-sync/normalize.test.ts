@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { englishTimeFor, type EpisodeAnchors } from './normalize'
+import { englishTimeFor, cantoTimeFor, type EpisodeAnchors } from './normalize'
 
 const anchors: EpisodeAnchors = {
   cantoContentStart: 10,
@@ -24,5 +24,24 @@ describe('englishTimeFor', () => {
   it('throws when the canto anchor span is zero or negative', () => {
     const zeroSpan: EpisodeAnchors = { ...anchors, cantoContentEnd: 10 }
     expect(() => englishTimeFor(10, zeroSpan)).toThrow('Invalid anchors')
+  })
+})
+
+describe('cantoTimeFor', () => {
+  it('maps the english content start to the canto content start', () => {
+    expect(cantoTimeFor(20, anchors)).toBe(10)
+  })
+
+  it('maps the english content end to the canto content end', () => {
+    expect(cantoTimeFor(220, anchors)).toBe(110)
+  })
+
+  it('interpolates proportionally for a point in between', () => {
+    expect(cantoTimeFor(120, anchors)).toBe(60)
+  })
+
+  it('throws when the english anchor span is zero or negative', () => {
+    const zeroSpan: EpisodeAnchors = { ...anchors, englishContentEnd: 20 }
+    expect(() => cantoTimeFor(20, zeroSpan)).toThrow('Invalid anchors')
   })
 })

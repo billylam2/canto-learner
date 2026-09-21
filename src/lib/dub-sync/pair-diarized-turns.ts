@@ -1,6 +1,6 @@
 import type { WordGroup } from './group-words-by-speaker'
 import type { EpisodeAnchors } from './normalize'
-import { cuesToCandidateSegments } from './candidate-segments'
+import { cuesToCandidateSegments, englishCuesToCandidateSegments } from './candidate-segments'
 
 export interface DiarizedSegment {
   cantoStart: number
@@ -35,6 +35,17 @@ export function pairDiarizedTurns(
         englishEnd: filteredEnglish[index].end,
       })),
       usedFallback: false,
+    }
+  }
+
+  // Speaker diarization isn't supported for every canto language (notably Cantonese, at all), so a
+  // count mismatch usually means canto's turns are unusable (often a single undiarized blob) while
+  // english's are real. Prefer english's boundaries as the reference when it has any; only fall
+  // back to canto's own (likely degenerate) turns when english has none either.
+  if (filteredEnglish.length > 0) {
+    return {
+      segments: englishCuesToCandidateSegments(englishTurns, anchors),
+      usedFallback: true,
     }
   }
 

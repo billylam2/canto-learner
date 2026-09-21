@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cuesToCandidateSegments } from './candidate-segments'
+import { cuesToCandidateSegments, englishCuesToCandidateSegments } from './candidate-segments'
 import type { EpisodeAnchors } from './normalize'
 import type { CaptionCue } from './captions'
 
@@ -29,5 +29,27 @@ describe('cuesToCandidateSegments', () => {
 
   it('returns an empty array for no cues', () => {
     expect(cuesToCandidateSegments([], anchors)).toEqual([])
+  })
+})
+
+describe('englishCuesToCandidateSegments', () => {
+  it('maps each english-timeline cue within the anchor range to a candidate segment', () => {
+    const cues: CaptionCue[] = [{ start: 20, end: 40, text: 'hello' }]
+    const result = englishCuesToCandidateSegments(cues, anchors)
+    expect(result).toEqual([{ cantoStart: 10, cantoEnd: 20, englishStart: 20, englishEnd: 40 }])
+  })
+
+  it('drops cues that start before the english content start anchor', () => {
+    const cues: CaptionCue[] = [{ start: 15, end: 19, text: 'intro music' }]
+    expect(englishCuesToCandidateSegments(cues, anchors)).toEqual([])
+  })
+
+  it('drops cues that end after the english content end anchor', () => {
+    const cues: CaptionCue[] = [{ start: 221, end: 230, text: 'outro' }]
+    expect(englishCuesToCandidateSegments(cues, anchors)).toEqual([])
+  })
+
+  it('returns an empty array for no cues', () => {
+    expect(englishCuesToCandidateSegments([], anchors)).toEqual([])
   })
 })
