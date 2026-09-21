@@ -29,6 +29,18 @@ describe('downloadAudio', () => {
     expect(path.endsWith('.mp3')).toBe(true)
   })
 
+  it('requests 16kHz mono output, since Speech-to-Text silently garbles audio at an unexpected sample rate', async () => {
+    const child = makeFakeChild()
+    vi.mocked(spawn).mockReturnValue(child as never)
+
+    const promise = downloadAudio('video-1')
+    child.emit('close', 0)
+    await promise
+
+    const args = vi.mocked(spawn).mock.calls[0][1] as string[]
+    expect(args).toEqual(expect.arrayContaining(['--postprocessor-args', 'ExtractAudio:-ar 16000 -ac 1']))
+  })
+
   it('rejects with the captured stderr when yt-dlp exits with a non-zero code', async () => {
     const child = makeFakeChild()
     vi.mocked(spawn).mockReturnValue(child as never)
@@ -177,7 +189,10 @@ describe('transcribeWithDiarization', () => {
     ])
     expect(mockUpload).toHaveBeenCalledWith('/tmp/audio.mp3', expect.objectContaining({ destination: expect.any(String) }))
     expect(longRunningRecognize).toHaveBeenCalledWith(
-      expect.objectContaining({ audio: { uri: expect.stringMatching(/^gs:\/\/my-bucket\/.+\.mp3$/) } })
+      expect.objectContaining({
+        audio: { uri: expect.stringMatching(/^gs:\/\/my-bucket\/.+\.mp3$/) },
+        config: expect.objectContaining({ sampleRateHertz: 16000, audioChannelCount: 1 }),
+      })
     )
     expect(mockDelete).toHaveBeenCalled()
   })
