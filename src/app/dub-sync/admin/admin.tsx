@@ -1,15 +1,18 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { YoutubePlayer, type YoutubePlayerHandle } from '@/components/dub-sync/youtube-player'
-import type { DubEpisode, DubSegment } from '@/lib/db/dub-sync'
+import type { CantoWord, DubEpisode, DubSegment } from '@/lib/db/dub-sync'
 import { englishTimeFor, type EpisodeAnchors } from '@/lib/dub-sync/normalize'
+import { computeResyncTarget } from '@/lib/dub-sync/synced-playback'
+import { findNextWordStart } from '@/lib/dub-sync/next-word-start'
 import { NewEpisodeForm } from './new-episode-form'
 import { SegmentTable } from './segment-table'
 
 interface AdminProps {
   episodes: DubEpisode[]
   segmentsByEpisode: Record<string, DubSegment[]>
+  cantoWordsByEpisode: Record<string, CantoWord[]>
 }
 
 function hasAllAnchors(episode: DubEpisode): episode is DubEpisode & EpisodeAnchors {
@@ -21,9 +24,14 @@ function hasAllAnchors(episode: DubEpisode): episode is DubEpisode & EpisodeAnch
   )
 }
 
-export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSegments }: AdminProps) {
+export function Admin({
+  episodes: initialEpisodes,
+  segmentsByEpisode: initialSegments,
+  cantoWordsByEpisode: initialCantoWords,
+}: AdminProps) {
   const [episodes, setEpisodes] = useState(initialEpisodes)
   const [segmentsByEpisode, setSegmentsByEpisode] = useState(initialSegments)
+  const [cantoWordsByEpisode, setCantoWordsByEpisode] = useState(initialCantoWords)
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(initialEpisodes[0]?.id ?? null)
 
   const cantoPlayerRef = useRef<YoutubePlayerHandle>(null)
@@ -31,10 +39,12 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
 
   const episode = episodes.find((candidate) => candidate.id === selectedEpisodeId) ?? null
   const segments = selectedEpisodeId ? (segmentsByEpisode[selectedEpisodeId] ?? []) : []
+  const cantoWords = selectedEpisodeId ? (cantoWordsByEpisode[selectedEpisodeId] ?? []) : []
 
   function handleEpisodeCreated(newEpisode: DubEpisode) {
     setEpisodes((current) => [...current, newEpisode])
     setSegmentsByEpisode((current) => ({ ...current, [newEpisode.id]: [] }))
+    setCantoWordsByEpisode((current) => ({ ...current, [newEpisode.id]: [] }))
     setSelectedEpisodeId(newEpisode.id)
   }
 
@@ -122,40 +132,66 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
     }))
   }
 
-  const [pendingSegment, setPendingSegment] = useState<{
-    cantoStart: number
-    cantoEnd: number | null
-    englishStart: number
-    englishEnd: number | null
-  } | null>(null)
+  const [transcribeState, setTranscribeState] = useState<{ working: boolean; error: string | null }>({
+    working: false,
+    error: null,
+  })
 
-  function markSegmentStart() {
+  async function runTranscribeCanto() {
+    if (!episode) return
+    setTranscribeState({ working: true, error: null })
+    const response = await fetch(`/api/dub-sync/episodes/${episode.id}/transcribe-canto`, { method: 'POST' })
+    const body = await response.json()
+    if (!response.ok) {
+      setTranscribeState({ working: false, error: body.error ?? 'Failed to transcribe Cantonese audio' })
+      return
+    }
+    setCantoWordsByEpisode((current) => ({ ...current, [episode.id]: body.words }))
+    setTranscribeState({ working: false, error: null })
+  }
+
+  const [syncing, setSyncing] = useState(false)
+
+  function startSyncedPlayback() {
     if (!episode || !anchorsSet) return
-    const time = cantoPlayerRef.current?.getCurrentTime() ?? 0
-    const englishStart = englishTimeFor(time, episode as DubEpisode & EpisodeAnchors)
-    setPendingSegment({ cantoStart: time, cantoEnd: null, englishStart, englishEnd: null })
-    englishPlayerRef.current?.seekTo(englishStart, true)
+    cantoPlayerRef.current?.playVideo()
+    englishPlayerRef.current?.playVideo()
+    setSyncing(true)
   }
 
-  function markSegmentEnd() {
-    if (!episode || !pendingSegment || !anchorsSet) return
-    const time = cantoPlayerRef.current?.getCurrentTime() ?? 0
-    const englishEnd = englishTimeFor(time, episode as DubEpisode & EpisodeAnchors)
-    setPendingSegment({ ...pendingSegment, cantoEnd: time, englishEnd })
-    englishPlayerRef.current?.seekTo(englishEnd, true)
+  function stopSyncedPlayback() {
+    cantoPlayerRef.current?.pauseVideo()
+    englishPlayerRef.current?.pauseVideo()
+    setSyncing(false)
   }
 
-  async function saveSegment() {
-    if (!episode || !pendingSegment || pendingSegment.cantoEnd === null || pendingSegment.englishEnd === null) return
+  useEffect(() => {
+    if (!syncing || !episode || !anchorsSet) return
+    const anchors = episode as DubEpisode & EpisodeAnchors
+    const interval = setInterval(() => {
+      const cantoTime = cantoPlayerRef.current?.getCurrentTime() ?? 0
+      const englishTime = englishPlayerRef.current?.getCurrentTime() ?? 0
+      const target = computeResyncTarget(cantoTime, englishTime, anchors)
+      if (target !== null) englishPlayerRef.current?.seekTo(target, true)
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [syncing, episode, anchorsSet])
+
+  async function markSegmentEnd() {
+    if (!episode || !anchorsSet) return
+    const anchors = episode as DubEpisode & EpisodeAnchors
+    const cantoEnd = cantoPlayerRef.current?.getCurrentTime() ?? 0
+    const englishEnd = englishTimeFor(cantoEnd, anchors)
+
+    const previousEnd = segments.length > 0 ? segments[segments.length - 1].cantoEnd : anchors.cantoContentStart
+    const nextWordStart = findNextWordStart(cantoWords, previousEnd, anchors.cantoContentEnd)
+    const cantoStart = nextWordStart ?? previousEnd
+    const englishStart = englishTimeFor(cantoStart, anchors)
+
     const response = await fetch(`/api/dub-sync/episodes/${episode.id}/segments`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        cantoStart: pendingSegment.cantoStart,
-        cantoEnd: pendingSegment.cantoEnd,
-        englishStart: pendingSegment.englishStart,
-        englishEnd: pendingSegment.englishEnd,
-      }),
+      body: JSON.stringify({ cantoStart, cantoEnd, englishStart, englishEnd }),
     })
     if (response.ok) {
       const { segment } = await response.json()
@@ -163,34 +199,7 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
         ...current,
         [episode.id]: [...(current[episode.id] ?? []), segment],
       }))
-      setPendingSegment(null)
     }
-  }
-
-  const [autoMarkState, setAutoMarkState] = useState<{
-    working: boolean
-    error: string | null
-    warning: string | null
-  }>({
-    working: false,
-    error: null,
-    warning: null,
-  })
-
-  async function runAutoMark() {
-    if (!episode) return
-    setAutoMarkState({ working: true, error: null, warning: null })
-    const response = await fetch(`/api/dub-sync/episodes/${episode.id}/auto-mark`, { method: 'POST' })
-    const body = await response.json()
-    if (!response.ok) {
-      setAutoMarkState({ working: false, error: body.error ?? 'Failed to auto-mark segments', warning: null })
-      return
-    }
-    setSegmentsByEpisode((current) => ({
-      ...current,
-      [episode.id]: [...(current[episode.id] ?? []), ...body.segments],
-    }))
-    setAutoMarkState({ working: false, error: null, warning: body.warning ?? null })
   }
 
   const [captionsError, setCaptionsError] = useState<string | null>(null)
@@ -262,44 +271,32 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
             {!anchorsSet && <p className="text-gray-500 mb-4">Set anchors before marking segments.</p>}
 
             <div className="flex gap-2 mb-4">
-              <button onClick={markSegmentStart} disabled={!anchorsSet} className="border p-2 rounded">
-                Mark start
-              </button>
-              <button
-                onClick={markSegmentEnd}
-                disabled={!anchorsSet || !pendingSegment}
-                className="border p-2 rounded"
-              >
-                Mark end
-              </button>
-              <button
-                onClick={saveSegment}
-                disabled={!pendingSegment || pendingSegment.cantoEnd === null}
-                className="border p-2 rounded"
-              >
-                Save segment
-              </button>
-            </div>
-
-            <div className="flex gap-2 mb-4">
-              <button
-                onClick={runAutoMark}
-                disabled={!anchorsSet || autoMarkState.working}
-                className="border p-2 rounded"
-              >
-                {autoMarkState.working ? 'Working…' : 'Auto-mark from speech'}
+              <button onClick={runTranscribeCanto} disabled={transcribeState.working} className="border p-2 rounded">
+                {transcribeState.working ? 'Transcribing…' : 'Transcribe Cantonese'}
               </button>
               <button onClick={runGenerateFromCaptions} disabled={!anchorsSet} className="border p-2 rounded">
                 Generate from captions
               </button>
             </div>
 
-            {autoMarkState.error && (
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={syncing ? stopSyncedPlayback : startSyncedPlayback}
+                disabled={!anchorsSet}
+                className="border p-2 rounded"
+              >
+                {syncing ? 'Pause synced' : 'Play synced'}
+              </button>
+              <button onClick={markSegmentEnd} disabled={!anchorsSet} className="border p-2 rounded">
+                Mark segment end
+              </button>
+            </div>
+
+            {transcribeState.error && (
               <p role="alert" className="text-red-600 mb-4">
-                {autoMarkState.error}
+                {transcribeState.error}
               </p>
             )}
-            {autoMarkState.warning && <p className="text-amber-600 mb-4">{autoMarkState.warning}</p>}
             {captionsError && (
               <p role="alert" className="text-red-600 mb-4">
                 {captionsError}

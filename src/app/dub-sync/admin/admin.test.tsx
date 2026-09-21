@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('@/components/dub-sync/youtube-player', () => ({
   YoutubePlayer: vi.fn(({ elementId }: { elementId: string }) => <div data-testid={`player-${elementId}`} />),
@@ -29,6 +29,31 @@ const episodeB = {
   englishContentEnd: null,
 }
 
+function captureRefs() {
+  let cantoRef: React.Ref<unknown> | undefined
+  let englishRef: React.Ref<unknown> | undefined
+  vi.mocked(YoutubePlayer).mockImplementation(({ elementId, ...props }: never) => {
+    const ref = (props as { ref?: React.Ref<unknown> }).ref
+    if (elementId === 'canto-player') cantoRef = ref
+    if (elementId === 'english-player') englishRef = ref
+    return <div data-testid={`player-${elementId}`} />
+  })
+  return {
+    assign(cantoHandle: unknown, englishHandle: unknown) {
+      if (cantoRef && typeof cantoRef === 'object' && 'current' in cantoRef) {
+        ;(cantoRef as { current: unknown }).current = cantoHandle
+      }
+      if (englishRef && typeof englishRef === 'object' && 'current' in englishRef) {
+        ;(englishRef as { current: unknown }).current = englishHandle
+      }
+    },
+  }
+}
+
+function makeHandle(getCurrentTime: () => number) {
+  return { seekTo: vi.fn(), playVideo: vi.fn(), pauseVideo: vi.fn(), getCurrentTime }
+}
+
 describe('Admin', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -36,7 +61,13 @@ describe('Admin', () => {
   })
 
   it('lists episodes and switches the selected panel without navigating', () => {
-    render(<Admin episodes={[episodeA, episodeB]} segmentsByEpisode={{ 'ep-a': [], 'ep-b': [] }} />)
+    render(
+      <Admin
+        episodes={[episodeA, episodeB]}
+        segmentsByEpisode={{ 'ep-a': [], 'ep-b': [] }}
+        cantoWordsByEpisode={{ 'ep-a': [], 'ep-b': [] }}
+      />
+    )
 
     expect(screen.getByRole('heading', { name: 'Muddy Puddles' })).toBeInTheDocument()
 
@@ -51,7 +82,7 @@ describe('Admin', () => {
       json: () => Promise.resolve({ episode: { ...episodeB, id: 'ep-c', title: 'New Episode' } }),
     } as Response)
 
-    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} cantoWordsByEpisode={{ 'ep-a': [] }} />)
 
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'New Episode' } })
     fireEvent.change(screen.getByLabelText('Cantonese video ID'), { target: { value: 'c' } })
@@ -62,26 +93,14 @@ describe('Admin', () => {
   })
 
   it('marks the canto content start from the canto player and saves it', async () => {
-    let capturedRef: React.Ref<unknown> | undefined
-    vi.mocked(YoutubePlayer).mockImplementation(({ elementId, ...props }: never) => {
-      if (elementId === 'canto-player') capturedRef = (props as { ref?: React.Ref<unknown> }).ref
-      return <div data-testid={`player-${elementId}`} />
-    })
+    const refs = captureRefs()
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ episode: { ...episodeA, cantoContentStart: 8 } }),
     } as Response)
 
-    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} />)
-
-    if (capturedRef && typeof capturedRef === 'object' && 'current' in capturedRef) {
-      ;(capturedRef as { current: unknown }).current = {
-        seekTo: vi.fn(),
-        playVideo: vi.fn(),
-        pauseVideo: vi.fn(),
-        getCurrentTime: () => 8,
-      }
-    }
+    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} cantoWordsByEpisode={{ 'ep-a': [] }} />)
+    refs.assign(makeHandle(() => 8), makeHandle(() => 0))
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Mark content start' })[0])
 
@@ -91,57 +110,7 @@ describe('Admin', () => {
   })
 })
 
-describe('Admin manual segment creation', () => {
-  const episodeWithAnchors = {
-    ...episodeA,
-    cantoContentStart: 10,
-    cantoContentEnd: 110,
-    englishContentStart: 20,
-    englishContentEnd: 220,
-  }
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    vi.stubGlobal('fetch', vi.fn())
-    vi.mocked(YoutubePlayer).mockImplementation(({ elementId }: { elementId: string }) => (
-      <div data-testid={`player-${elementId}`} />
-    ))
-  })
-
-  it('marks start then end and saves a segment', async () => {
-    vi.mocked(fetch).mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          segment: {
-            id: 'seg-1',
-            episodeId: 'ep-a',
-            position: 0,
-            label: null,
-            cantoStart: 20,
-            cantoEnd: 30,
-            englishStart: 40,
-            englishEnd: 60,
-          },
-        }),
-    } as Response)
-
-    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Mark start' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Mark end' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Save segment' }))
-
-    await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith(
-        '/api/dub-sync/episodes/ep-a/segments',
-        expect.objectContaining({ method: 'POST' })
-      )
-    )
-  })
-})
-
-describe('Admin auto-mark and generate from captions', () => {
+describe('Admin transcribe canto and generate from captions', () => {
   const episodeWithAnchors = {
     ...episodeA,
     cantoContentStart: 10,
@@ -157,7 +126,7 @@ describe('Admin auto-mark and generate from captions', () => {
     ))
   })
 
-  it('runs auto-mark, shows a working state, and appends returned segments', async () => {
+  it('runs transcribe canto, shows a working state, and clears it on success', async () => {
     let resolveFetch: (value: unknown) => void = () => {}
     vi.stubGlobal(
       'fetch',
@@ -168,61 +137,44 @@ describe('Admin auto-mark and generate from captions', () => {
       )
     )
 
-    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Auto-mark from speech' }))
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{ 'ep-a': [] }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Transcribe Cantonese' }))
 
-    expect(screen.getByRole('button', { name: 'Working…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Transcribing…' })).toBeDisabled()
 
     resolveFetch({
       ok: true,
       json: () =>
-        Promise.resolve({
-          segments: [
-            {
-              id: 'seg-1',
-              episodeId: 'ep-a',
-              position: 0,
-              label: null,
-              cantoStart: 10,
-              cantoEnd: 15,
-              englishStart: 20,
-              englishEnd: 26,
-            },
-          ],
-        }),
+        Promise.resolve({ words: [{ id: 'w-1', episodeId: 'ep-a', text: '你好', startTime: 1, endTime: 1.5 }] }),
     })
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Auto-mark from speech' })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Transcribe Cantonese' })).toBeInTheDocument())
     expect(fetch).toHaveBeenCalledWith(
-      '/api/dub-sync/episodes/ep-a/auto-mark',
+      '/api/dub-sync/episodes/ep-a/transcribe-canto',
       expect.objectContaining({ method: 'POST' })
     )
   })
 
-  it('shows a warning (not an error) when auto-mark falls back to proportional timing', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ segments: [], warning: "turn counts didn't match (3 vs 2)" }),
-      })
-    )
-
-    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Auto-mark from speech' }))
-
-    await waitFor(() => expect(screen.getByText(/turn counts didn't match/)).toBeInTheDocument())
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-  })
-
-  it('shows an error when auto-mark fails', async () => {
+  it('shows an error when transcription fails', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({ ok: false, json: () => Promise.resolve({ error: 'yt-dlp not found' }) })
     )
 
-    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Auto-mark from speech' }))
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{ 'ep-a': [] }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Transcribe Cantonese' }))
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('yt-dlp not found'))
   })
@@ -250,13 +202,208 @@ describe('Admin auto-mark and generate from captions', () => {
       })
     )
 
-    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{ 'ep-a': [] }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Generate from captions' }))
 
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
         '/api/dub-sync/episodes/ep-a/generate-segments',
         expect.objectContaining({ method: 'POST' })
+      )
+    )
+  })
+})
+
+describe('Admin synced playback', () => {
+  const episodeWithAnchors = {
+    ...episodeA,
+    cantoContentStart: 10,
+    cantoContentEnd: 110,
+    englishContentStart: 20,
+    englishContentEnd: 220,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('plays both videos when starting synced playback, and shows a pause toggle', () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 0)
+    const englishHandle = makeHandle(() => 0)
+
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{ 'ep-a': [] }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
+    refs.assign(cantoHandle, englishHandle)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+
+    expect(cantoHandle.playVideo).toHaveBeenCalled()
+    expect(englishHandle.playVideo).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Pause synced' })).toBeInTheDocument()
+  })
+
+  it('pauses both videos when stopping synced playback', () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 0)
+    const englishHandle = makeHandle(() => 0)
+
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{ 'ep-a': [] }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
+    refs.assign(cantoHandle, englishHandle)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Pause synced' }))
+
+    expect(cantoHandle.pauseVideo).toHaveBeenCalled()
+    expect(englishHandle.pauseVideo).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Play synced' })).toBeInTheDocument()
+  })
+
+  it('re-seeks the english player only once drift exceeds the threshold', () => {
+    vi.useFakeTimers()
+    const refs = captureRefs()
+    let cantoTime = 60 // englishTimeFor(60, anchors) = 120
+    let englishTime = 120.2 // within the 0.75s threshold
+    const cantoHandle = makeHandle(() => cantoTime)
+    const englishHandle = makeHandle(() => englishTime)
+
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{ 'ep-a': [] }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
+    refs.assign(cantoHandle, englishHandle)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+    vi.advanceTimersByTime(1000)
+    expect(englishHandle.seekTo).not.toHaveBeenCalled()
+
+    englishTime = 130
+    vi.advanceTimersByTime(1000)
+    expect(englishHandle.seekTo).toHaveBeenCalledWith(120, true)
+  })
+})
+
+describe('Admin mark segment end', () => {
+  const episodeWithAnchors = {
+    ...episodeA,
+    cantoContentStart: 10,
+    cantoContentEnd: 110,
+    englishContentStart: 20,
+    englishContentEnd: 220,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  it('marks a segment, inferring the start from the next word after the content start', async () => {
+    const refs = captureRefs()
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          segment: {
+            id: 'seg-1',
+            episodeId: 'ep-a',
+            position: 0,
+            label: null,
+            cantoStart: 15,
+            cantoEnd: 35,
+            englishStart: 30,
+            englishEnd: 70,
+          },
+        }),
+    } as Response)
+
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{ 'ep-a': [] }}
+        cantoWordsByEpisode={{ 'ep-a': [{ id: 'w-1', episodeId: 'ep-a', text: 'hi', startTime: 15, endTime: 15.5 }] }}
+      />
+    )
+    refs.assign(makeHandle(() => 35), makeHandle(() => 60))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark segment end' }))
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a/segments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ cantoStart: 15, cantoEnd: 35, englishStart: 30, englishEnd: 70 }),
+        })
+      )
+    )
+  })
+
+  it('falls back to the previous segment end when no word is found after it', async () => {
+    const refs = captureRefs()
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          segment: {
+            id: 'seg-2',
+            episodeId: 'ep-a',
+            position: 1,
+            label: null,
+            cantoStart: 35,
+            cantoEnd: 50,
+            englishStart: 70,
+            englishEnd: 100,
+          },
+        }),
+    } as Response)
+
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{
+          'ep-a': [
+            { id: 'seg-1', episodeId: 'ep-a', position: 0, label: null, cantoStart: 15, cantoEnd: 35, englishStart: 30, englishEnd: 70 },
+          ],
+        }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
+    refs.assign(makeHandle(() => 50), makeHandle(() => 80))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark segment end' }))
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a/segments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ cantoStart: 35, cantoEnd: 50, englishStart: 70, englishEnd: 100 }),
+        })
       )
     )
   })
