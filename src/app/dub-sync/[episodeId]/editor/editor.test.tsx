@@ -207,3 +207,65 @@ describe('Editor manual segment creation', () => {
     expect(await screen.findByText(/26\.5s/)).toBeInTheDocument()
   })
 })
+
+describe('Editor generate from captions', () => {
+  const episodeWithAnchors = {
+    ...baseEpisode,
+    cantoContentStart: 10,
+    cantoContentEnd: 110,
+    englishContentStart: 20,
+    englishContentEnd: 220,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(YoutubePlayer).mockImplementation(({ elementId }: { elementId: string }) => (
+      <div data-testid={`player-${elementId}`} />
+    ))
+  })
+
+  it('fetches generated segments and appends them to the list', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            segments: [
+              {
+                id: 'seg-1',
+                episodeId: 'ep-1',
+                position: 0,
+                label: null,
+                cantoStart: 10,
+                cantoEnd: 15,
+                englishStart: 20,
+                englishEnd: 30,
+              },
+            ],
+          }),
+      })
+    )
+
+    render(<Editor episode={episodeWithAnchors} segments={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Generate from captions' }))
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-1/generate-segments',
+        expect.objectContaining({ method: 'POST' })
+      )
+    )
+    expect(await screen.findByText(/Segment 1/)).toBeInTheDocument()
+  })
+
+  it('shows an inline error when generation fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, json: () => Promise.resolve({ error: 'no captions' }) })
+    )
+    render(<Editor episode={episodeWithAnchors} segments={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Generate from captions' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('no captions')
+  })
+})

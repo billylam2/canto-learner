@@ -176,6 +176,19 @@ export function Editor({ episode: initialEpisode, segments: initialSegments }: E
     }
   }
 
+  const [generateError, setGenerateError] = useState<string | null>(null)
+
+  async function generateFromCaptions() {
+    setGenerateError(null)
+    const response = await fetch(`/api/dub-sync/episodes/${episode.id}/generate-segments`, { method: 'POST' })
+    const body = await response.json()
+    if (!response.ok) {
+      setGenerateError(body.error ?? 'Failed to generate segments')
+      return
+    }
+    setSegments((current) => [...current, ...body.segments])
+  }
+
   return (
     <main className="max-w-4xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">{episode.title}</h1>
@@ -218,10 +231,16 @@ export function Editor({ episode: initialEpisode, segments: initialSegments }: E
         >
           Save segment
         </button>
-        <button disabled={!anchorsSet} className="border p-2 rounded">
+        <button onClick={generateFromCaptions} disabled={!anchorsSet} className="border p-2 rounded">
           Generate from captions
         </button>
       </div>
+
+      {generateError && (
+        <p role="alert" className="text-red-600 mb-4">
+          {generateError}
+        </p>
+      )}
 
       <ul className="flex flex-col gap-2">
         {segments.map((segment) =>
