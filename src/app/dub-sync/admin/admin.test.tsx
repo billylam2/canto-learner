@@ -108,6 +108,20 @@ describe('Admin', () => {
       expect(fetch).toHaveBeenCalledWith('/api/dub-sync/episodes/ep-a', expect.objectContaining({ method: 'PATCH' }))
     )
   })
+
+  it('shows the current anchor values, or "not set" when null', () => {
+    const episodeWithSomeAnchors = { ...episodeA, cantoContentStart: 29.3, englishContentEnd: 300 }
+    render(
+      <Admin
+        episodes={[episodeWithSomeAnchors]}
+        segmentsByEpisode={{ 'ep-a': [] }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
+
+    expect(screen.getByText('Start: 29.30s · End: not set')).toBeInTheDocument()
+    expect(screen.getByText('Start: not set · End: 300.00s')).toBeInTheDocument()
+  })
 })
 
 describe('Admin transcribe canto and generate from captions', () => {

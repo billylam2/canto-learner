@@ -15,6 +15,10 @@ interface AdminProps {
   cantoWordsByEpisode: Record<string, CantoWord[]>
 }
 
+function formatAnchor(value: number | null): string {
+  return value === null ? 'not set' : `${value.toFixed(2)}s`
+}
+
 function hasAllAnchors(episode: DubEpisode): episode is DubEpisode & EpisodeAnchors {
   return (
     episode.cantoContentStart !== null &&
@@ -255,6 +259,9 @@ export function Admin({
                     Mark content end
                   </button>
                 </div>
+                <p className="text-sm text-gray-500 mt-1">
+                  Start: {formatAnchor(episode.cantoContentStart)} · End: {formatAnchor(episode.cantoContentEnd)}
+                </p>
               </div>
               <div>
                 <YoutubePlayer ref={englishPlayerRef} videoId={episode.englishVideoId} elementId="english-player" />
@@ -266,6 +273,9 @@ export function Admin({
                     Mark content end
                   </button>
                 </div>
+                <p className="text-sm text-gray-500 mt-1">
+                  Start: {formatAnchor(episode.englishContentStart)} · End: {formatAnchor(episode.englishContentEnd)}
+                </p>
               </div>
             </div>
             {!anchorsSet && <p className="text-gray-500 mb-4">Set anchors before marking segments.</p>}
