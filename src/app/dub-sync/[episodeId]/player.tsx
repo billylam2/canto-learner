@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { YoutubePlayer, type YoutubePlayerHandle } from '@/components/dub-sync/youtube-player'
-import { SegmentPlaybackController, type DubLanguage } from '@/lib/dub-sync/player-controller'
+import { SegmentPlaybackController } from '@/lib/dub-sync/player-controller'
 import type { DubEpisode, DubSegment } from '@/lib/db/dub-sync'
 
 interface PlayerProps {
@@ -10,35 +10,38 @@ interface PlayerProps {
   segments: DubSegment[]
 }
 
+type EpisodeModeState =
+  | { status: 'inactive' }
+  | { status: 'playing'; segmentIndex: number }
+  | { status: 'waiting'; segmentIndex: number }
+  | { status: 'complete' }
+
 export function Player({ episode, segments }: PlayerProps) {
   const cantoPlayerRef = useRef<YoutubePlayerHandle>(null)
   const englishPlayerRef = useRef<YoutubePlayerHandle>(null)
-  const [activeLanguage, setActiveLanguage] = useState<DubLanguage>('canto')
-  const [currentSegmentIndex, setCurrentSegmentIndex] = useState(0)
   const [playerError, setPlayerError] = useState<string | null>(null)
+  const [episodeMode, setEpisodeMode] = useState<EpisodeModeState>({ status: 'inactive' })
 
   const controllerRef = useRef<SegmentPlaybackController | null>(null)
 
   useEffect(() => {
     controllerRef.current = new SegmentPlaybackController(
       (lang) => (lang === 'canto' ? cantoPlayerRef.current! : englishPlayerRef.current!),
-      setActiveLanguage
+      () => {}
     )
   }, [])
 
-  const currentSegment = segments[currentSegmentIndex]
-
   function play(segmentIndex: number) {
-    setCurrentSegmentIndex(segmentIndex)
     const segment = segments[segmentIndex]
-    controllerRef.current?.playSegment(activeLanguage, {
-      start: activeLanguage === 'canto' ? segment.cantoStart : segment.englishStart,
-      end: activeLanguage === 'canto' ? segment.cantoEnd : segment.englishEnd,
-    })
+    controllerRef.current?.playSegment('canto', { start: segment.cantoStart, end: segment.cantoEnd })
+  }
+
+  function playEnglish(segmentIndex: number) {
+    const segment = segments[segmentIndex]
+    controllerRef.current?.playSegment('english', { start: segment.englishStart, end: segment.englishEnd })
   }
 
   function playBoth(segmentIndex: number) {
-    setCurrentSegmentIndex(segmentIndex)
     const segment = segments[segmentIndex]
     controllerRef.current?.playBoth(
       { start: segment.cantoStart, end: segment.cantoEnd },
@@ -46,24 +49,60 @@ export function Player({ episode, segments }: PlayerProps) {
     )
   }
 
-  function switchLanguage() {
-    if (!currentSegment) return
-    const nextLanguage: DubLanguage = activeLanguage === 'canto' ? 'english' : 'canto'
-    controllerRef.current?.playSegment(nextLanguage, {
-      start: nextLanguage === 'canto' ? currentSegment.cantoStart : currentSegment.englishStart,
-      end: nextLanguage === 'canto' ? currentSegment.cantoEnd : currentSegment.englishEnd,
-    })
+  function playCantoLine(segmentIndex: number) {
+    setEpisodeMode({ status: 'playing', segmentIndex })
+    const segment = segments[segmentIndex]
+    controllerRef.current?.playSegment('canto', { start: segment.cantoStart, end: segment.cantoEnd }, () =>
+      setEpisodeMode({ status: 'waiting', segmentIndex })
+    )
   }
+
+  function startEpisode() {
+    playCantoLine(0)
+  }
+
+  function replayCantoLine() {
+    if (episodeMode.status !== 'waiting') return
+    playCantoLine(episodeMode.segmentIndex)
+  }
+
+  function showEnglishLine() {
+    if (episodeMode.status !== 'waiting') return
+    const { segmentIndex } = episodeMode
+    setEpisodeMode({ status: 'playing', segmentIndex })
+    const segment = segments[segmentIndex]
+    controllerRef.current?.playSegment('english', { start: segment.englishStart, end: segment.englishEnd }, () =>
+      setEpisodeMode({ status: 'waiting', segmentIndex })
+    )
+  }
+
+  function nextLine() {
+    if (episodeMode.status !== 'waiting') return
+    const nextIndex = episodeMode.segmentIndex + 1
+    if (nextIndex < segments.length) {
+      playCantoLine(nextIndex)
+    } else {
+      setEpisodeMode({ status: 'complete' })
+    }
+  }
+
+  function stopEpisode() {
+    controllerRef.current?.stop()
+    setEpisodeMode({ status: 'inactive' })
+  }
+
+  const inEpisodeMode = episodeMode.status !== 'inactive'
+  const currentEpisodeSegment =
+    episodeMode.status === 'playing' || episodeMode.status === 'waiting' ? segments[episodeMode.segmentIndex] : null
 
   return (
     <main className="max-w-3xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">{episode.title}</h1>
 
-      {/* Both players stay mounted with fixed elementId/videoId props for their whole lifetime —
-          only visibility toggles. Swapping which branch renders which player instead would make
-          React reconcile them as the same position and recreate the underlying YT.Player on every
-          language switch, destroying playback state. */}
-      <div className={activeLanguage === 'canto' ? '' : 'hidden'}>
+      {/* The Cantonese video is always the one shown. The English video stays mounted (so its
+          audio can play) but is always visually hidden — the picture on screen never cuts away,
+          even while English audio plays over the frozen Cantonese frame. */}
+      <div data-testid="canto-video-wrapper">
         <YoutubePlayer
           ref={cantoPlayerRef}
           videoId={episode.cantoneseVideoId}
@@ -71,7 +110,7 @@ export function Player({ episode, segments }: PlayerProps) {
           onError={() => setPlayerError('This video is unavailable.')}
         />
       </div>
-      <div className={activeLanguage === 'english' ? '' : 'hidden'}>
+      <div data-testid="english-video-wrapper" className="sr-only">
         <YoutubePlayer
           ref={englishPlayerRef}
           videoId={episode.englishVideoId}
@@ -86,23 +125,58 @@ export function Player({ episode, segments }: PlayerProps) {
         </p>
       )}
 
-      <button onClick={switchLanguage} className="border p-2 rounded my-4">
-        Switch language
-      </button>
+      {inEpisodeMode ? (
+        <div className="my-4 flex flex-col gap-2">
+          {episodeMode.status === 'complete' ? (
+            <p>Episode complete!</p>
+          ) : (
+            currentEpisodeSegment && <p>{currentEpisodeSegment.label ?? `Segment ${currentEpisodeSegment.position + 1}`}</p>
+          )}
+          <div className="flex gap-2">
+            {episodeMode.status === 'waiting' && (
+              <>
+                <button onClick={replayCantoLine} className="border p-2 rounded">
+                  Replay Cantonese
+                </button>
+                <button onClick={showEnglishLine} className="border p-2 rounded">
+                  Show English
+                </button>
+                <button onClick={nextLine} className="border p-2 rounded">
+                  Next line
+                </button>
+              </>
+            )}
+            <button onClick={stopEpisode} className="border p-2 rounded">
+              Stop episode
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {segments.length > 0 && (
+            <button onClick={startEpisode} className="border p-2 rounded my-4">
+              Play episode
+            </button>
+          )}
 
-      <ul className="flex flex-col gap-2">
-        {segments.map((segment, index) => (
-          <li key={segment.id} className="flex items-center gap-2">
-            <span>{segment.label ?? `Segment ${segment.position + 1}`}</span>
-            <button onClick={() => play(index)} className="border p-1 rounded text-sm">
-              Play
-            </button>
-            <button onClick={() => playBoth(index)} className="border p-1 rounded text-sm">
-              Play both
-            </button>
-          </li>
-        ))}
-      </ul>
+          <ul className="flex flex-col gap-2">
+            {segments.map((segment, index) => (
+              <li key={segment.id} className="flex items-center gap-2">
+                <span>{segment.label ?? `Segment ${segment.position + 1}`}</span>
+                <button onClick={() => play(index)} className="border p-1 rounded text-sm">
+                  Play
+                </button>
+                <button onClick={() => playEnglish(index)} className="border p-1 rounded text-sm">
+                  Play English
+                </button>
+                <button onClick={() => playBoth(index)} className="border p-1 rounded text-sm">
+                  Play both
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </main>
   )
 }

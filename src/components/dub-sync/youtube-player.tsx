@@ -19,19 +19,32 @@ export const YoutubePlayer = forwardRef<YoutubePlayerHandle, YoutubePlayerProps>
   const playerRef = useRef<YouTubePlayerLike | null>(null)
   const [ready, setReady] = useState(false)
 
+  // Callers commonly pass an inline arrow function for onError, which gets a new identity on
+  // every render. Reading it via a ref (rather than depending on it directly) keeps the effect
+  // below from tearing down and reconstructing the real YT.Player — and resetting playback — on
+  // every unrelated re-render of the caller.
+  const onErrorRef = useRef(onError)
+  onErrorRef.current = onError
+
   useEffect(() => {
     let cancelled = false
     loadYoutubeIframeApi().then(({ Player }) => {
       if (cancelled) return
       playerRef.current = new Player(elementId, {
         videoId,
-        events: { onReady: () => setReady(true), onError: () => onError?.() },
+        events: { onReady: () => setReady(true), onError: () => onErrorRef.current?.() },
       })
     })
     return () => {
       cancelled = true
+      // React (in dev StrictMode) mounts, unmounts, and remounts once to surface cleanup bugs.
+      // Without destroying the player here, the first mount's iframe is never torn down before
+      // the second mount targets the same element id, leaving a dangling node that later fails
+      // a React removeChild call.
+      if (typeof playerRef.current?.destroy === 'function') playerRef.current.destroy()
+      playerRef.current = null
     }
-  }, [elementId, videoId, onError])
+  }, [elementId, videoId])
 
   useImperativeHandle(
     ref,

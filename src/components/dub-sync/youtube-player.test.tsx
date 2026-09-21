@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
-import { createRef } from 'react'
+import { createRef, useState } from 'react'
 import { YoutubePlayer, type YoutubePlayerHandle } from './youtube-player'
 
 vi.mock('@/lib/dub-sync/youtube-iframe-api', () => ({
@@ -15,6 +15,7 @@ function makeFakePlayer() {
     playVideo: vi.fn(),
     pauseVideo: vi.fn(),
     getCurrentTime: vi.fn(() => 42),
+    destroy: vi.fn(),
   }
 }
 
@@ -86,5 +87,59 @@ describe('YoutubePlayer', () => {
 
     PlayerCtor.mock.calls[0][1].events.onError()
     expect(onError).toHaveBeenCalled()
+  })
+
+  it('does not recreate the underlying player when only the onError prop identity changes', async () => {
+    // A caller that passes a fresh inline arrow function as onError on every render (a common
+    // pattern) must not cause the real YT.Player to be torn down and reconstructed — that would
+    // reset playback (seek position, play state) on every unrelated re-render of the parent.
+    const fakePlayer = makeFakePlayer()
+    const PlayerCtor = vi.fn(function PlayerCtor() {
+      return fakePlayer
+    })
+    vi.mocked(loadYoutubeIframeApi).mockResolvedValue({ Player: PlayerCtor as never })
+
+    function Wrapper() {
+      const [, forceRerender] = useState(0)
+      return (
+        <>
+          <YoutubePlayer videoId="video-1" elementId="canto-player" onError={() => {}} />
+          <button onClick={() => forceRerender((n) => n + 1)}>rerender</button>
+        </>
+      )
+    }
+
+    render(<Wrapper />)
+    await waitFor(() => expect(PlayerCtor).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'rerender' }).click()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      screen.getByRole('button', { name: 'rerender' }).click()
+      await Promise.resolve()
+    })
+
+    expect(PlayerCtor).toHaveBeenCalledTimes(1)
+  })
+
+  it('destroys the underlying player on unmount', async () => {
+    // React (in dev StrictMode) mounts, unmounts, and remounts effects once to surface cleanup
+    // bugs. Without calling the YouTube API's own destroy() here, the first mount's iframe is
+    // never torn down before the second mount targets the same element id, leaving a dangling
+    // node that later fails a React removeChild call.
+    const fakePlayer = makeFakePlayer()
+    const PlayerCtor = vi.fn(function PlayerCtor() {
+      return fakePlayer
+    })
+    vi.mocked(loadYoutubeIframeApi).mockResolvedValue({ Player: PlayerCtor as never })
+
+    const { unmount } = render(<YoutubePlayer videoId="video-1" elementId="canto-player" />)
+    await waitFor(() => expect(PlayerCtor).toHaveBeenCalledTimes(1))
+
+    unmount()
+
+    expect(fakePlayer.destroy).toHaveBeenCalled()
   })
 })

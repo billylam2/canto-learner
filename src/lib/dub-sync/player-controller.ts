@@ -3,6 +3,7 @@ export interface YouTubePlayerLike {
   playVideo(): void
   pauseVideo(): void
   getCurrentTime(): number
+  destroy?(): void
 }
 
 export type DubLanguage = 'canto' | 'english'
