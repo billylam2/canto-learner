@@ -36,3 +36,10 @@ When `content/audio/<slug>.mp3` exists, `sync-content` uploads it as-is instead 
 To go back to AI-generated audio for an item, delete its file from `content/audio/` and re-run `npm run sync-content -- <slug>`.
 
 Recorded audio files in `content/audio/` are treated as real content and should be committed to the repo, the same as the generated images in `content/images/`.
+
+## Dub Sync admin tool
+
+A separate, password-gated personal tool at `/dub-sync/admin` for building the Cantonese/English clip-pairing data used by `/dub-sync`. Requires two things beyond the main app's setup:
+
+- **`DUB_SYNC_ADMIN_PASSWORD`** in `.env.local` — the single shared password for `/dub-sync/admin`, `/dub-sync/login`, and the episode/segment-editing API routes. The player at `/dub-sync/<episodeId>` itself stays open, unauthenticated.
+- **[`yt-dlp`](https://github.com/yt-dlp/yt-dlp)** installed and on `PATH` wherever `npm run dev` (or however the app is served) runs — required by the "Auto-mark from speech" button, which downloads each video's audio temporarily (never kept or served) to transcribe it via Google Cloud Speech-to-Text with speaker diarization. Also requires the Speech-to-Text API enabled on the same `GOOGLE_CLOUD_PROJECT` already used for text-to-speech.
