@@ -95,3 +95,166 @@ export async function updateEpisodeAnchors(
   }
   return toDubEpisode(data as DubEpisodeRow)
 }
+
+export interface DubSegment {
+  id: string
+  episodeId: string
+  position: number
+  label: string | null
+  cantoStart: number
+  cantoEnd: number
+  englishStart: number
+  englishEnd: number
+}
+
+interface DubSegmentRow {
+  id: string
+  episode_id: string
+  position: number
+  label: string | null
+  canto_start: number
+  canto_end: number
+  english_start: number
+  english_end: number
+}
+
+function toDubSegment(row: DubSegmentRow): DubSegment {
+  return {
+    id: row.id,
+    episodeId: row.episode_id,
+    position: row.position,
+    label: row.label,
+    cantoStart: row.canto_start,
+    cantoEnd: row.canto_end,
+    englishStart: row.english_start,
+    englishEnd: row.english_end,
+  }
+}
+
+export interface CreateSegmentInput {
+  label?: string | null
+  cantoStart: number
+  cantoEnd: number
+  englishStart: number
+  englishEnd: number
+}
+
+export interface UpdateSegmentInput {
+  label?: string | null
+  cantoStart?: number
+  cantoEnd?: number
+  englishStart?: number
+  englishEnd?: number
+}
+
+async function getNextPosition(supabase: SupabaseClient, episodeId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('dub_segments')
+    .select('position')
+    .eq('episode_id', episodeId)
+    .order('position', { ascending: false })
+    .limit(1)
+
+  if (error) {
+    throw new Error(`Failed to determine next segment position for episode ${episodeId}: ${error.message}`)
+  }
+  const rows = (data ?? []) as Array<{ position: number }>
+  return rows.length > 0 ? rows[0].position + 1 : 0
+}
+
+export async function listSegments(supabase: SupabaseClient, episodeId: string): Promise<DubSegment[]> {
+  const { data, error } = await supabase
+    .from('dub_segments')
+    .select('*')
+    .eq('episode_id', episodeId)
+    .order('position', { ascending: true })
+
+  if (error) {
+    throw new Error(`Failed to list segments for episode ${episodeId}: ${error.message}`)
+  }
+  return ((data ?? []) as DubSegmentRow[]).map(toDubSegment)
+}
+
+export async function createSegment(
+  supabase: SupabaseClient,
+  episodeId: string,
+  input: CreateSegmentInput
+): Promise<DubSegment> {
+  const position = await getNextPosition(supabase, episodeId)
+  const { data, error } = await supabase
+    .from('dub_segments')
+    .insert({
+      episode_id: episodeId,
+      position,
+      label: input.label ?? null,
+      canto_start: input.cantoStart,
+      canto_end: input.cantoEnd,
+      english_start: input.englishStart,
+      english_end: input.englishEnd,
+    })
+    .select('*')
+    .single()
+
+  if (error || !data) {
+    throw new Error(`Failed to create segment for episode ${episodeId}: ${error?.message ?? 'unknown error'}`)
+  }
+  return toDubSegment(data as DubSegmentRow)
+}
+
+export async function createSegmentsBulk(
+  supabase: SupabaseClient,
+  episodeId: string,
+  inputs: CreateSegmentInput[]
+): Promise<DubSegment[]> {
+  if (inputs.length === 0) return []
+
+  const startPosition = await getNextPosition(supabase, episodeId)
+  const rows = inputs.map((input, index) => ({
+    episode_id: episodeId,
+    position: startPosition + index,
+    label: input.label ?? null,
+    canto_start: input.cantoStart,
+    canto_end: input.cantoEnd,
+    english_start: input.englishStart,
+    english_end: input.englishEnd,
+  }))
+
+  const { data, error } = await supabase.from('dub_segments').insert(rows).select('*')
+
+  if (error) {
+    throw new Error(`Failed to bulk-create segments for episode ${episodeId}: ${error.message}`)
+  }
+  return ((data ?? []) as DubSegmentRow[]).map(toDubSegment)
+}
+
+export async function updateSegment(
+  supabase: SupabaseClient,
+  segmentId: string,
+  patch: UpdateSegmentInput
+): Promise<DubSegment> {
+  const updates: Record<string, unknown> = {}
+  if (patch.label !== undefined) updates.label = patch.label
+  if (patch.cantoStart !== undefined) updates.canto_start = patch.cantoStart
+  if (patch.cantoEnd !== undefined) updates.canto_end = patch.cantoEnd
+  if (patch.englishStart !== undefined) updates.english_start = patch.englishStart
+  if (patch.englishEnd !== undefined) updates.english_end = patch.englishEnd
+
+  const { data, error } = await supabase
+    .from('dub_segments')
+    .update(updates)
+    .eq('id', segmentId)
+    .select('*')
+    .single()
+
+  if (error || !data) {
+    throw new Error(`Failed to update segment ${segmentId}: ${error?.message ?? 'unknown error'}`)
+  }
+  return toDubSegment(data as DubSegmentRow)
+}
+
+export async function deleteSegment(supabase: SupabaseClient, segmentId: string): Promise<void> {
+  const { error } = await supabase.from('dub_segments').delete().eq('id', segmentId)
+  if (error) {
+    throw new Error(`Failed to delete segment ${segmentId}: ${error.message}`)
+  }
+}
