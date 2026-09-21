@@ -1,6 +1,10 @@
-import type { CaptionCue } from './captions'
 import type { EpisodeAnchors } from './normalize'
 import { englishTimeFor } from './normalize'
+
+export interface TimedCue {
+  start: number
+  end: number
+}
 
 export interface CandidateSegment {
   cantoStart: number
@@ -9,7 +13,7 @@ export interface CandidateSegment {
   englishEnd: number
 }
 
-export function cuesToCandidateSegments(cues: CaptionCue[], anchors: EpisodeAnchors): CandidateSegment[] {
+export function cuesToCandidateSegments(cues: TimedCue[], anchors: EpisodeAnchors): CandidateSegment[] {
   return cues
     .filter((cue) => cue.start >= anchors.cantoContentStart && cue.end <= anchors.cantoContentEnd)
     .map((cue) => ({
