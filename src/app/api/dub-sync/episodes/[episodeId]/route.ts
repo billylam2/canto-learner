@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/client'
 import { updateEpisodeAnchors } from '@/lib/db/dub-sync'
+import { readAdminSession } from '@/lib/auth/admin-session'
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ episodeId: string }> }
 ): Promise<NextResponse> {
+  const session = await readAdminSession(request)
+  if (!session) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  }
+
   const { episodeId } = await params
   const body = await request.json().catch(() => null)
   const cantoContentStart = typeof body?.cantoContentStart === 'number' ? body.cantoContentStart : null

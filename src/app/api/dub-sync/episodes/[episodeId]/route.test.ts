@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
+import { createAdminSessionCookieValue, ADMIN_COOKIE_NAME } from '@/lib/auth/admin-session'
 
 vi.mock('@/lib/supabase/client', () => ({
   createSupabaseServerClient: vi.fn(() => ({})),
@@ -12,11 +13,17 @@ vi.mock('@/lib/db/dub-sync', () => ({
 import { PATCH } from './route'
 import { updateEpisodeAnchors } from '@/lib/db/dub-sync'
 
-function makeRequest(body: unknown) {
+async function adminCookieHeader(): Promise<string> {
+  process.env.SESSION_SECRET = 'a'.repeat(32)
+  const value = await createAdminSessionCookieValue({ isAdmin: true })
+  return `${ADMIN_COOKIE_NAME}=${value}`
+}
+
+async function makeRequest(body: unknown) {
   return new NextRequest('http://localhost/api/dub-sync/episodes/ep-1', {
     method: 'PATCH',
     body: JSON.stringify(body),
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', cookie: await adminCookieHeader() },
   })
 }
 
@@ -36,7 +43,7 @@ describe('PATCH /api/dub-sync/episodes/[episodeId]', () => {
     })
 
     const response = await PATCH(
-      makeRequest({ cantoContentStart: 10, cantoContentEnd: 110, englishContentStart: 20, englishContentEnd: 220 }),
+      await makeRequest({ cantoContentStart: 10, cantoContentEnd: 110, englishContentStart: 20, englishContentEnd: 220 }),
       { params: Promise.resolve({ episodeId: 'ep-1' }) }
     )
 
@@ -50,9 +57,19 @@ describe('PATCH /api/dub-sync/episodes/[episodeId]', () => {
   })
 
   it('rejects a request missing an anchor field', async () => {
-    const response = await PATCH(makeRequest({ cantoContentStart: 10 }), {
+    const response = await PATCH(await makeRequest({ cantoContentStart: 10 }), {
       params: Promise.resolve({ episodeId: 'ep-1' }),
     })
     expect(response.status).toBe(400)
+  })
+
+  it('rejects an unauthenticated request', async () => {
+    const request = new NextRequest('http://localhost/api/dub-sync/episodes/ep-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ cantoContentStart: 10, cantoContentEnd: 110, englishContentStart: 20, englishContentEnd: 220 }),
+      headers: { 'content-type': 'application/json' },
+    })
+    const response = await PATCH(request, { params: Promise.resolve({ episodeId: 'ep-1' }) })
+    expect(response.status).toBe(401)
   })
 })

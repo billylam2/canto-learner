@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
+import { createAdminSessionCookieValue, ADMIN_COOKIE_NAME } from '@/lib/auth/admin-session'
 
 vi.mock('@/lib/supabase/client', () => ({
   createSupabaseServerClient: vi.fn(() => ({})),
@@ -14,6 +15,12 @@ import { PATCH, DELETE } from './route'
 import { updateSegment, deleteSegment } from '@/lib/db/dub-sync'
 
 const params = Promise.resolve({ episodeId: 'ep-1', segmentId: 'seg-1' })
+
+async function adminCookieHeader(): Promise<string> {
+  process.env.SESSION_SECRET = 'a'.repeat(32)
+  const value = await createAdminSessionCookieValue({ isAdmin: true })
+  return `${ADMIN_COOKIE_NAME}=${value}`
+}
 
 describe('PATCH /api/dub-sync/episodes/[episodeId]/segments/[segmentId]', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -33,12 +40,22 @@ describe('PATCH /api/dub-sync/episodes/[episodeId]/segments/[segmentId]', () => 
     const request = new NextRequest('http://localhost/api/dub-sync/episodes/ep-1/segments/seg-1', {
       method: 'PATCH',
       body: JSON.stringify({ cantoEnd: 16.0 }),
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', cookie: await adminCookieHeader() },
     })
     const response = await PATCH(request, { params })
 
     expect(response.status).toBe(200)
     expect(updateSegment).toHaveBeenCalledWith(expect.anything(), 'seg-1', { cantoEnd: 16.0 })
+  })
+
+  it('rejects an unauthenticated PATCH', async () => {
+    const request = new NextRequest('http://localhost/api/dub-sync/episodes/ep-1/segments/seg-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ cantoEnd: 16.0 }),
+      headers: { 'content-type': 'application/json' },
+    })
+    const response = await PATCH(request, { params })
+    expect(response.status).toBe(401)
   })
 })
 
@@ -48,9 +65,16 @@ describe('DELETE /api/dub-sync/episodes/[episodeId]/segments/[segmentId]', () =>
   it('deletes the segment', async () => {
     const request = new NextRequest('http://localhost/api/dub-sync/episodes/ep-1/segments/seg-1', {
       method: 'DELETE',
+      headers: { cookie: await adminCookieHeader() },
     })
     const response = await DELETE(request, { params })
     expect(response.status).toBe(200)
     expect(deleteSegment).toHaveBeenCalledWith(expect.anything(), 'seg-1')
+  })
+
+  it('rejects an unauthenticated DELETE', async () => {
+    const request = new NextRequest('http://localhost/api/dub-sync/episodes/ep-1/segments/seg-1', { method: 'DELETE' })
+    const response = await DELETE(request, { params })
+    expect(response.status).toBe(401)
   })
 })

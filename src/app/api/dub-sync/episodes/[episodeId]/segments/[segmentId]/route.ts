@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/client'
 import { updateSegment, deleteSegment, type UpdateSegmentInput } from '@/lib/db/dub-sync'
+import { readAdminSession } from '@/lib/auth/admin-session'
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ episodeId: string; segmentId: string }> }
 ): Promise<NextResponse> {
+  const session = await readAdminSession(request)
+  if (!session) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  }
+
   const { segmentId } = await params
   const body = await request.json().catch(() => null)
 
@@ -25,6 +31,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ episodeId: string; segmentId: string }> }
 ): Promise<NextResponse> {
+  const session = await readAdminSession(request)
+  if (!session) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  }
+
   const { segmentId } = await params
   const supabase = createSupabaseServerClient()
   await deleteSegment(supabase, segmentId)

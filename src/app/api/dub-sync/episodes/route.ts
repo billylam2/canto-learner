@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/client'
 import { createEpisode } from '@/lib/db/dub-sync'
+import { readAdminSession } from '@/lib/auth/admin-session'
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const session = await readAdminSession(request)
+  if (!session) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  }
+
   const body = await request.json().catch(() => null)
   const title = typeof body?.title === 'string' ? body.title : null
   const cantoneseVideoId = typeof body?.cantoneseVideoId === 'string' ? body.cantoneseVideoId : null

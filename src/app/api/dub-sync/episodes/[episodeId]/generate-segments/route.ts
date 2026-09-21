@@ -4,11 +4,17 @@ import { getEpisode, createSegmentsBulk } from '@/lib/db/dub-sync'
 import { fetchCantoneseCaptionCues } from '@/lib/dub-sync/captions'
 import { cuesToCandidateSegments } from '@/lib/dub-sync/candidate-segments'
 import type { EpisodeAnchors } from '@/lib/dub-sync/normalize'
+import { readAdminSession } from '@/lib/auth/admin-session'
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ episodeId: string }> }
 ): Promise<NextResponse> {
+  const session = await readAdminSession(request)
+  if (!session) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  }
+
   const { episodeId } = await params
   const supabase = createSupabaseServerClient()
   const episode = await getEpisode(supabase, episodeId)
