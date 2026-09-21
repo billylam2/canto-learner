@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { YoutubePlayer, type YoutubePlayerHandle } from '@/components/dub-sync/youtube-player'
 import { SegmentPlaybackController } from '@/lib/dub-sync/player-controller'
+import { findLastPlayedSegment } from '@/lib/dub-sync/find-last-played-segment'
 import type { DubEpisode, DubSegment } from '@/lib/db/dub-sync'
 
 interface PlayerProps {
@@ -10,17 +11,11 @@ interface PlayerProps {
   segments: DubSegment[]
 }
 
-type EpisodeModeState =
-  | { status: 'inactive' }
-  | { status: 'playing'; segmentIndex: number }
-  | { status: 'waiting'; segmentIndex: number }
-  | { status: 'complete' }
-
 export function Player({ episode, segments }: PlayerProps) {
   const cantoPlayerRef = useRef<YoutubePlayerHandle>(null)
   const englishPlayerRef = useRef<YoutubePlayerHandle>(null)
   const [playerError, setPlayerError] = useState<string | null>(null)
-  const [episodeMode, setEpisodeMode] = useState<EpisodeModeState>({ status: 'inactive' })
+  const [replayMessage, setReplayMessage] = useState<string | null>(null)
 
   const controllerRef = useRef<SegmentPlaybackController | null>(null)
 
@@ -31,69 +26,22 @@ export function Player({ episode, segments }: PlayerProps) {
     )
   }, [])
 
-  function play(segmentIndex: number) {
-    const segment = segments[segmentIndex]
-    controllerRef.current?.playSegment('canto', { start: segment.cantoStart, end: segment.cantoEnd })
-  }
-
-  function playEnglish(segmentIndex: number) {
-    const segment = segments[segmentIndex]
-    controllerRef.current?.playSegment('english', { start: segment.englishStart, end: segment.englishEnd })
-  }
-
-  function playBoth(segmentIndex: number) {
-    const segment = segments[segmentIndex]
-    controllerRef.current?.playBoth(
-      { start: segment.cantoStart, end: segment.cantoEnd },
-      { start: segment.englishStart, end: segment.englishEnd }
-    )
-  }
-
-  function playCantoLine(segmentIndex: number) {
-    setEpisodeMode({ status: 'playing', segmentIndex })
-    const segment = segments[segmentIndex]
-    controllerRef.current?.playSegment('canto', { start: segment.cantoStart, end: segment.cantoEnd }, () =>
-      setEpisodeMode({ status: 'waiting', segmentIndex })
-    )
-  }
-
-  function startEpisode() {
-    playCantoLine(0)
-  }
-
-  function replayCantoLine() {
-    if (episodeMode.status !== 'waiting') return
-    playCantoLine(episodeMode.segmentIndex)
-  }
-
-  function showEnglishLine() {
-    if (episodeMode.status !== 'waiting') return
-    const { segmentIndex } = episodeMode
-    setEpisodeMode({ status: 'playing', segmentIndex })
-    const segment = segments[segmentIndex]
-    controllerRef.current?.playSegment('english', { start: segment.englishStart, end: segment.englishEnd }, () =>
-      setEpisodeMode({ status: 'waiting', segmentIndex })
-    )
-  }
-
-  function nextLine() {
-    if (episodeMode.status !== 'waiting') return
-    const nextIndex = episodeMode.segmentIndex + 1
-    if (nextIndex < segments.length) {
-      playCantoLine(nextIndex)
-    } else {
-      setEpisodeMode({ status: 'complete' })
+  function replayInEnglish() {
+    const currentTime = cantoPlayerRef.current?.getCurrentTime() ?? 0
+    const segment = findLastPlayedSegment(currentTime, segments)
+    if (!segment) {
+      setReplayMessage('No line to replay yet.')
+      return
     }
-  }
 
-  function stopEpisode() {
-    controllerRef.current?.stop()
-    setEpisodeMode({ status: 'inactive' })
+    setReplayMessage(null)
+    cantoPlayerRef.current?.pauseVideo()
+    controllerRef.current?.playSegment(
+      'english',
+      { start: segment.englishStart, end: segment.englishEnd },
+      () => cantoPlayerRef.current?.playVideo()
+    )
   }
-
-  const inEpisodeMode = episodeMode.status !== 'inactive'
-  const currentEpisodeSegment =
-    episodeMode.status === 'playing' || episodeMode.status === 'waiting' ? segments[episodeMode.segmentIndex] : null
 
   return (
     <main className="max-w-3xl mx-auto p-6">
@@ -125,58 +73,11 @@ export function Player({ episode, segments }: PlayerProps) {
         </p>
       )}
 
-      {inEpisodeMode ? (
-        <div className="my-4 flex flex-col gap-2">
-          {episodeMode.status === 'complete' ? (
-            <p>Episode complete!</p>
-          ) : (
-            currentEpisodeSegment && <p>{currentEpisodeSegment.label ?? `Segment ${currentEpisodeSegment.position + 1}`}</p>
-          )}
-          <div className="flex gap-2">
-            {episodeMode.status === 'waiting' && (
-              <>
-                <button onClick={replayCantoLine} className="border p-2 rounded">
-                  Replay Cantonese
-                </button>
-                <button onClick={showEnglishLine} className="border p-2 rounded">
-                  Show English
-                </button>
-                <button onClick={nextLine} className="border p-2 rounded">
-                  Next line
-                </button>
-              </>
-            )}
-            <button onClick={stopEpisode} className="border p-2 rounded">
-              Stop episode
-            </button>
-          </div>
-        </div>
-      ) : (
-        <>
-          {segments.length > 0 && (
-            <button onClick={startEpisode} className="border p-2 rounded my-4">
-              Play episode
-            </button>
-          )}
+      <button onClick={replayInEnglish} className="border p-2 rounded my-4">
+        Replay in English
+      </button>
 
-          <ul className="flex flex-col gap-2">
-            {segments.map((segment, index) => (
-              <li key={segment.id} className="flex items-center gap-2">
-                <span>{segment.label ?? `Segment ${segment.position + 1}`}</span>
-                <button onClick={() => play(index)} className="border p-1 rounded text-sm">
-                  Play
-                </button>
-                <button onClick={() => playEnglish(index)} className="border p-1 rounded text-sm">
-                  Play English
-                </button>
-                <button onClick={() => playBoth(index)} className="border p-1 rounded text-sm">
-                  Play both
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+      {replayMessage && <p className="text-gray-600">{replayMessage}</p>}
     </main>
   )
 }
