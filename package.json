@@ -19,6 +19,7 @@
     "sync-scenes": "tsx --env-file=.env.local scripts/sync-scenes.ts"
   },
   "dependencies": {
+    "@google-cloud/speech": "^8.1.0",
     "@google-cloud/text-to-speech": "^7.1.0",
     "@supabase/supabase-js": "2.116.0",
     "bcryptjs": "3.0.3",
