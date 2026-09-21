@@ -25,7 +25,7 @@ describe('Header', () => {
 
   it('renders the Canto wordmark', () => {
     render(<Header />)
-    expect(screen.getByText('Canto')).toBeInTheDocument()
+    expect(screen.getByText('Canto Learner')).toBeInTheDocument()
   })
 
   it('does not show a back link by default', () => {
