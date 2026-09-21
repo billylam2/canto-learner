@@ -8,7 +8,8 @@ A personal tool for comparing two independently-dubbed YouTube videos of the sam
 
 - **Scope:** a standalone tool, not a feature of the kids' app. Lives under a new route section, `src/app/dub-sync/`, in the existing single Next.js app — no monorepo/workspace changes.
 - **Video playback:** the YouTube IFrame Player API, embedding the actual videos. No downloading or local storage of video/audio.
-- **Alignment approach:** linear (proportional) time normalization between two manually-marked anchor points per video, per episode — not caption-based or translation-based matching. This was chosen over auto-aligning via YouTube auto-captions because caption availability/quality for Cantonese is unreliable, and because dub scripts diverge enough (reordered/merged/cut lines) that automatic cross-language line-matching would only ever be a rough first pass anyway. The proportional approach is far simpler to build (no captions API, no translation API, no matching algorithm) and produces an equally reasonable starting guess, which is always manually adjustable per segment.
+- **Cross-language alignment approach:** linear (proportional) time normalization between two manually-marked anchor points per video, per episode — not caption-based or translation-based matching. This was chosen over auto-aligning via YouTube auto-captions because caption availability/quality for Cantonese is unreliable, and because dub scripts diverge enough (reordered/merged/cut lines) that automatic cross-language line-matching would only ever be a rough first pass anyway. The proportional approach is far simpler to build (no translation API, no cross-language matching algorithm) and produces an equally reasonable starting guess, which is always manually adjustable per segment.
+- **Segment boundary assist:** an optional "auto-generate segments from captions" step uses the Cantonese video's own auto-captions (single track, no translation) to propose candidate segment boundaries — one per caption cue, since each cue is already pause-delimited. This is a heuristic, not true speaker diarization (it can't distinguish "same character continuing" from "different character starting" — it only detects pauses), so every generated candidate remains fully reviewable: mergeable, splittable, deletable, and adjustable, same as a manually-marked segment. It speeds up the common case without replacing manual marking, which stays available for episodes with poor or missing captions.
 - **Storage:** two new tables in the existing Supabase project, isolated from the kids' app's tables.
 - **Auth:** none. The route is unlisted (not linked from the kids' app) and this is single-user personal use, so no login gate.
 
@@ -61,9 +62,12 @@ This mapping assumes roughly even pacing across the episode, so segments away fr
 `src/app/dub-sync/[episodeId]/editor/page.tsx` — per-episode editor, with both YouTube IFrame embeds (Cantonese + English) visible side by side:
 
 1. **Set anchors** (once per episode, required before adding segments): scrub each player to where dialogue actually starts/ends, click "Mark content start" / "Mark content end" for that player. Persists the four anchor fields.
-2. **Add a segment**: scrub the Cantonese player, click "Mark start," let it play to the end of the line/phrase, click "Mark end." The tool computes the proposed English `[start, end]` via the formula above and seeks the English player there so it can be previewed immediately.
-3. **Adjust if needed**: nudge buttons (±0.5s) or direct scrub-and-remark on the English player to override the proposed boundary before saving.
-4. **Save**, with an optional label. Saved segments are listed below in order, each with play/edit/delete controls.
+2. **Auto-generate segments (optional)**: click "Generate from captions" to fetch the Cantonese video's auto-captions and create one candidate segment per caption cue within the anchor range, with `english_start`/`english_end` computed via the normalization formula. All candidates appear in the segment list below, editable like any other segment. If captions are unavailable or too poor to use, this step is simply skipped.
+3. **Add a segment manually**: scrub the Cantonese player, click "Mark start," let it play to the end of the line/phrase, click "Mark end." The tool computes the proposed English `[start, end]` via the formula above and seeks the English player there so it can be previewed immediately.
+4. **Adjust as needed**: for any segment (auto-generated or manual), nudge buttons (±0.5s) or direct scrub-and-remark on either player to override its boundaries, merge it with a neighbor, split it, or delete it.
+5. **Save**, with an optional label. Segments are listed below in order, each with play/edit/delete controls.
+
+Captions are fetched via YouTube's unofficial timedtext endpoint (no official public API exists for reading auto-captions) — acceptable for a personal tool, but not a sanctioned integration, so it could break if YouTube changes the endpoint.
 
 ## Player
 
@@ -79,10 +83,12 @@ State: current segment, current language (`canto` | `english`).
 ## Error handling
 
 - YouTube player errors (video unavailable, private, etc.) surface as a simple inline message. No retry or fallback logic — this is a personal tool, and a visible error is sufficient.
-- The editor disables "Mark start" for segments until all four anchors are set, avoiding a divide-by-zero in the interpolation formula.
+- The editor disables "Mark start" and "Generate from captions" until all four anchors are set, avoiding a divide-by-zero in the interpolation formula.
+- If caption fetching fails or returns no cues, "Generate from captions" surfaces an inline message and produces no candidates; manual marking is unaffected.
 
 ## Testing approach
 
 - Unit tests for the interpolation formula (`englishTimeFor(cantoT, anchors)`), including edge cases at the anchor boundaries.
+- Unit tests for turning fetched caption cues into candidate segments (cue-to-segment mapping, filtering to the anchor range).
 - Unit tests for the pause-at-segment-end polling logic and the "Play both" chaining, using a mocked YouTube player.
 - Manual QA via `claude-in-chrome`: create an episode, set anchors, add a couple of segments, and verify Play / Switch language / Play both all behave correctly against real embedded videos.
