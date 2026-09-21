@@ -140,7 +140,10 @@ describe('transcribeWords', () => {
     process.env.DUB_SYNC_GCS_BUCKET = originalBucketEnv
   })
 
-  it('extracts words with timestamps from the transcription result', async () => {
+  it('extracts and concatenates words from every result, not just the last', async () => {
+    // Long audio comes back as multiple results — one per silence-delimited chunk of speech, all
+    // of them final — rather than one result covering the whole clip. Taking only the last one
+    // (as this function used to) silently discards most of the transcript.
     mockUpload.mockResolvedValue(undefined)
     mockDelete.mockResolvedValue(undefined)
     vi.mocked(Storage).mockImplementation(function StorageMock() {
@@ -151,13 +154,20 @@ describe('transcribeWords', () => {
       promise: vi.fn().mockResolvedValue([
         {
           results: [
-            { alternatives: [{ words: [] }] }, // earlier, non-final results are ignored
             {
               alternatives: [
                 {
                   words: [
                     { word: '你好', startTime: { seconds: '0', nanos: 0 }, endTime: { seconds: '0', nanos: 500000000 } },
-                    { word: '喬治', startTime: { seconds: '1', nanos: 0 }, endTime: { seconds: '1', nanos: 500000000 } },
+                  ],
+                },
+              ],
+            },
+            {
+              alternatives: [
+                {
+                  words: [
+                    { word: '喬治', startTime: { seconds: '60', nanos: 0 }, endTime: { seconds: '60', nanos: 500000000 } },
                   ],
                 },
               ],
@@ -175,7 +185,7 @@ describe('transcribeWords', () => {
 
     expect(words).toEqual([
       { text: '你好', startTime: 0, endTime: 0.5 },
-      { text: '喬治', startTime: 1, endTime: 1.5 },
+      { text: '喬治', startTime: 60, endTime: 60.5 },
     ])
     expect(mockUpload).toHaveBeenCalledWith('/tmp/audio.mp3', expect.objectContaining({ destination: expect.any(String) }))
     expect(longRunningRecognize).toHaveBeenCalledWith(

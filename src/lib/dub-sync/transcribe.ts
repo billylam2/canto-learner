@@ -93,8 +93,10 @@ export async function transcribeWords(audioFilePath: string, languageCode: strin
 
     const [response] = await operation.promise()
     const results = response.results ?? []
-    const lastResult = results[results.length - 1]
-    const wordInfos = lastResult?.alternatives?.[0]?.words ?? []
+    // Long audio comes back as multiple results — one per silence-delimited chunk of speech, all
+    // of them final — rather than a single result covering the whole clip, so every result's words
+    // must be concatenated rather than just the last one's.
+    const wordInfos = results.flatMap((result) => result.alternatives?.[0]?.words ?? [])
 
     return wordInfos.map((wordInfo) => ({
       text: wordInfo.word ?? '',
