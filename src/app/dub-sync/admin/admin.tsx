@@ -5,6 +5,7 @@ import { YoutubePlayer, type YoutubePlayerHandle } from '@/components/dub-sync/y
 import type { DubEpisode, DubSegment } from '@/lib/db/dub-sync'
 import type { EpisodeAnchors } from '@/lib/dub-sync/normalize'
 import { NewEpisodeForm } from './new-episode-form'
+import { SegmentTable } from './segment-table'
 
 interface AdminProps {
   episodes: DubEpisode[]
@@ -105,6 +106,22 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
 
   const anchorsSet = episode ? hasAllAnchors(episode) : false
 
+  function handleSegmentUpdated(updated: DubSegment) {
+    if (!selectedEpisodeId) return
+    setSegmentsByEpisode((current) => ({
+      ...current,
+      [selectedEpisodeId]: current[selectedEpisodeId].map((s) => (s.id === updated.id ? updated : s)),
+    }))
+  }
+
+  function handleSegmentDeleted(segmentId: string) {
+    if (!selectedEpisodeId) return
+    setSegmentsByEpisode((current) => ({
+      ...current,
+      [selectedEpisodeId]: current[selectedEpisodeId].filter((s) => s.id !== segmentId),
+    }))
+  }
+
   return (
     <div className="flex gap-6 p-6">
       <aside className="w-64 flex flex-col gap-2">
@@ -154,9 +171,14 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
                 </div>
               </div>
             </div>
-            {/* Segment table, manual add, and auto-mark controls are added in later tasks. */}
-            {!anchorsSet && <p className="text-gray-500">Set anchors before marking segments.</p>}
-            <p className="text-sm text-gray-500">{segments.length} segment(s)</p>
+            {/* Manual add and auto-mark controls are added in later tasks. */}
+            {!anchorsSet && <p className="text-gray-500 mb-4">Set anchors before marking segments.</p>}
+            <SegmentTable
+              episodeId={episode.id}
+              segments={segments}
+              onUpdate={handleSegmentUpdated}
+              onDelete={handleSegmentDeleted}
+            />
           </>
         )}
       </main>
