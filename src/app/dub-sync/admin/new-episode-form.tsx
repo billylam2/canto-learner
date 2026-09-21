@@ -1,10 +1,13 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
+import type { DubEpisode } from '@/lib/db/dub-sync'
 
-export function NewEpisodeForm() {
-  const router = useRouter()
+interface NewEpisodeFormProps {
+  onCreated: (episode: DubEpisode) => void
+}
+
+export function NewEpisodeForm({ onCreated }: NewEpisodeFormProps) {
   const [title, setTitle] = useState('')
   const [cantoneseVideoId, setCantoneseVideoId] = useState('')
   const [englishVideoId, setEnglishVideoId] = useState('')
@@ -28,7 +31,10 @@ export function NewEpisodeForm() {
       return
     }
     const { episode } = await response.json()
-    router.push(`/dub-sync/${episode.id}/editor`)
+    setTitle('')
+    setCantoneseVideoId('')
+    setEnglishVideoId('')
+    onCreated(episode)
   }
 
   return (
