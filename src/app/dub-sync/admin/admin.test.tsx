@@ -90,3 +90,53 @@ describe('Admin', () => {
     )
   })
 })
+
+describe('Admin manual segment creation', () => {
+  const episodeWithAnchors = {
+    ...episodeA,
+    cantoContentStart: 10,
+    cantoContentEnd: 110,
+    englishContentStart: 20,
+    englishContentEnd: 220,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn())
+    vi.mocked(YoutubePlayer).mockImplementation(({ elementId }: { elementId: string }) => (
+      <div data-testid={`player-${elementId}`} />
+    ))
+  })
+
+  it('marks start then end and saves a segment', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          segment: {
+            id: 'seg-1',
+            episodeId: 'ep-a',
+            position: 0,
+            label: null,
+            cantoStart: 20,
+            cantoEnd: 30,
+            englishStart: 40,
+            englishEnd: 60,
+          },
+        }),
+    } as Response)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark start' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mark end' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save segment' }))
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a/segments',
+        expect.objectContaining({ method: 'POST' })
+      )
+    )
+  })
+})

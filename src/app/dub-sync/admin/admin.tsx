@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { YoutubePlayer, type YoutubePlayerHandle } from '@/components/dub-sync/youtube-player'
 import type { DubEpisode, DubSegment } from '@/lib/db/dub-sync'
-import type { EpisodeAnchors } from '@/lib/dub-sync/normalize'
+import { englishTimeFor, type EpisodeAnchors } from '@/lib/dub-sync/normalize'
 import { NewEpisodeForm } from './new-episode-form'
 import { SegmentTable } from './segment-table'
 
@@ -122,6 +122,51 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
     }))
   }
 
+  const [pendingSegment, setPendingSegment] = useState<{
+    cantoStart: number
+    cantoEnd: number | null
+    englishStart: number
+    englishEnd: number | null
+  } | null>(null)
+
+  function markSegmentStart() {
+    if (!episode || !anchorsSet) return
+    const time = cantoPlayerRef.current?.getCurrentTime() ?? 0
+    const englishStart = englishTimeFor(time, episode as DubEpisode & EpisodeAnchors)
+    setPendingSegment({ cantoStart: time, cantoEnd: null, englishStart, englishEnd: null })
+    englishPlayerRef.current?.seekTo(englishStart, true)
+  }
+
+  function markSegmentEnd() {
+    if (!episode || !pendingSegment || !anchorsSet) return
+    const time = cantoPlayerRef.current?.getCurrentTime() ?? 0
+    const englishEnd = englishTimeFor(time, episode as DubEpisode & EpisodeAnchors)
+    setPendingSegment({ ...pendingSegment, cantoEnd: time, englishEnd })
+    englishPlayerRef.current?.seekTo(englishEnd, true)
+  }
+
+  async function saveSegment() {
+    if (!episode || !pendingSegment || pendingSegment.cantoEnd === null || pendingSegment.englishEnd === null) return
+    const response = await fetch(`/api/dub-sync/episodes/${episode.id}/segments`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        cantoStart: pendingSegment.cantoStart,
+        cantoEnd: pendingSegment.cantoEnd,
+        englishStart: pendingSegment.englishStart,
+        englishEnd: pendingSegment.englishEnd,
+      }),
+    })
+    if (response.ok) {
+      const { segment } = await response.json()
+      setSegmentsByEpisode((current) => ({
+        ...current,
+        [episode.id]: [...(current[episode.id] ?? []), segment],
+      }))
+      setPendingSegment(null)
+    }
+  }
+
   return (
     <div className="flex gap-6 p-6">
       <aside className="w-64 flex flex-col gap-2">
@@ -171,8 +216,29 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
                 </div>
               </div>
             </div>
-            {/* Manual add and auto-mark controls are added in later tasks. */}
+            {/* Auto-mark controls are added in a later task. */}
             {!anchorsSet && <p className="text-gray-500 mb-4">Set anchors before marking segments.</p>}
+
+            <div className="flex gap-2 mb-4">
+              <button onClick={markSegmentStart} disabled={!anchorsSet} className="border p-2 rounded">
+                Mark start
+              </button>
+              <button
+                onClick={markSegmentEnd}
+                disabled={!anchorsSet || !pendingSegment}
+                className="border p-2 rounded"
+              >
+                Mark end
+              </button>
+              <button
+                onClick={saveSegment}
+                disabled={!pendingSegment || pendingSegment.cantoEnd === null}
+                className="border p-2 rounded"
+              >
+                Save segment
+              </button>
+            </div>
+
             <SegmentTable
               episodeId={episode.id}
               segments={segments}
