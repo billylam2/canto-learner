@@ -83,7 +83,7 @@ vi.mock('@google-cloud/storage', () => ({
 
 import { SpeechClient } from '@google-cloud/speech'
 import { Storage } from '@google-cloud/storage'
-import { transcribeWithDiarization, uploadToGcs, deleteFromGcs } from './transcribe'
+import { transcribeWords, uploadToGcs, deleteFromGcs } from './transcribe'
 
 describe('uploadToGcs', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -128,7 +128,7 @@ describe('deleteFromGcs', () => {
   })
 })
 
-describe('transcribeWithDiarization', () => {
+describe('transcribeWords', () => {
   const originalBucketEnv = process.env.DUB_SYNC_GCS_BUCKET
 
   beforeEach(() => {
@@ -140,7 +140,7 @@ describe('transcribeWithDiarization', () => {
     process.env.DUB_SYNC_GCS_BUCKET = originalBucketEnv
   })
 
-  it('extracts words with timestamps and speaker tags from the final diarized result', async () => {
+  it('extracts words with timestamps from the transcription result', async () => {
     mockUpload.mockResolvedValue(undefined)
     mockDelete.mockResolvedValue(undefined)
     vi.mocked(Storage).mockImplementation(function StorageMock() {
@@ -156,18 +156,8 @@ describe('transcribeWithDiarization', () => {
               alternatives: [
                 {
                   words: [
-                    {
-                      word: '你好',
-                      startTime: { seconds: '0', nanos: 0 },
-                      endTime: { seconds: '0', nanos: 500000000 },
-                      speakerTag: 1,
-                    },
-                    {
-                      word: '喬治',
-                      startTime: { seconds: '1', nanos: 0 },
-                      endTime: { seconds: '1', nanos: 500000000 },
-                      speakerTag: 2,
-                    },
+                    { word: '你好', startTime: { seconds: '0', nanos: 0 }, endTime: { seconds: '0', nanos: 500000000 } },
+                    { word: '喬治', startTime: { seconds: '1', nanos: 0 }, endTime: { seconds: '1', nanos: 500000000 } },
                   ],
                 },
               ],
@@ -181,11 +171,11 @@ describe('transcribeWithDiarization', () => {
       return { longRunningRecognize } as never
     })
 
-    const words = await transcribeWithDiarization('/tmp/audio.mp3', 'yue-Hant-HK')
+    const words = await transcribeWords('/tmp/audio.mp3', 'yue-Hant-HK')
 
     expect(words).toEqual([
-      { text: '你好', startTime: 0, endTime: 0.5, speakerTag: 1 },
-      { text: '喬治', startTime: 1, endTime: 1.5, speakerTag: 2 },
+      { text: '你好', startTime: 0, endTime: 0.5 },
+      { text: '喬治', startTime: 1, endTime: 1.5 },
     ])
     expect(mockUpload).toHaveBeenCalledWith('/tmp/audio.mp3', expect.objectContaining({ destination: expect.any(String) }))
     expect(longRunningRecognize).toHaveBeenCalledWith(
@@ -195,6 +185,25 @@ describe('transcribeWithDiarization', () => {
       })
     )
     expect(mockDelete).toHaveBeenCalled()
+  })
+
+  it('does not request speaker diarization', async () => {
+    mockUpload.mockResolvedValue(undefined)
+    mockDelete.mockResolvedValue(undefined)
+    vi.mocked(Storage).mockImplementation(function StorageMock() {
+      return { bucket: mockBucket } as never
+    })
+    const fakeOperation = { promise: vi.fn().mockResolvedValue([{ results: [] }]) }
+    const longRunningRecognize = vi.fn().mockResolvedValue([fakeOperation])
+    vi.mocked(SpeechClient).mockImplementation(function SpeechClientMock() {
+      return { longRunningRecognize } as never
+    })
+
+    await transcribeWords('/tmp/audio.mp3', 'en-US')
+
+    expect(longRunningRecognize).toHaveBeenCalledWith(
+      expect.objectContaining({ config: expect.not.objectContaining({ diarizationConfig: expect.anything() }) })
+    )
   })
 
   it('returns an empty array when there are no results', async () => {
@@ -208,7 +217,7 @@ describe('transcribeWithDiarization', () => {
       return { longRunningRecognize: vi.fn().mockResolvedValue([fakeOperation]) } as never
     })
 
-    const words = await transcribeWithDiarization('/tmp/audio.mp3', 'en-US')
+    const words = await transcribeWords('/tmp/audio.mp3', 'en-US')
     expect(words).toEqual([])
   })
 
@@ -222,13 +231,13 @@ describe('transcribeWithDiarization', () => {
       return { longRunningRecognize: vi.fn().mockRejectedValue(new Error('recognize failed')) } as never
     })
 
-    await expect(transcribeWithDiarization('/tmp/audio.mp3', 'en-US')).rejects.toThrow('recognize failed')
+    await expect(transcribeWords('/tmp/audio.mp3', 'en-US')).rejects.toThrow('recognize failed')
     expect(mockDelete).toHaveBeenCalled()
   })
 
   it('throws a clear error when DUB_SYNC_GCS_BUCKET is not set', async () => {
     delete process.env.DUB_SYNC_GCS_BUCKET
 
-    await expect(transcribeWithDiarization('/tmp/audio.mp3', 'en-US')).rejects.toThrow('DUB_SYNC_GCS_BUCKET')
+    await expect(transcribeWords('/tmp/audio.mp3', 'en-US')).rejects.toThrow('DUB_SYNC_GCS_BUCKET')
   })
 })

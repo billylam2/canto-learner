@@ -3,9 +3,14 @@ import os from 'node:os'
 import path from 'node:path'
 import { SpeechClient } from '@google-cloud/speech'
 import { Storage } from '@google-cloud/storage'
-import type { TranscribedWord } from './group-words-by-speaker'
 import { spawn } from './spawn-process'
 import { unlink } from './fs-process'
+
+export interface TranscribedWord {
+  text: string
+  startTime: number
+  endTime: number
+}
 
 export async function downloadAudio(videoId: string): Promise<string> {
   const outputPath = path.join(os.tmpdir(), `dub-sync-${videoId}-${randomUUID()}.mp3`)
@@ -67,10 +72,7 @@ export async function deleteFromGcs(gcsUri: string): Promise<void> {
   await storage.bucket(bucketName).file(objectName).delete().catch(() => {})
 }
 
-export async function transcribeWithDiarization(
-  audioFilePath: string,
-  languageCode: string
-): Promise<TranscribedWord[]> {
+export async function transcribeWords(audioFilePath: string, languageCode: string): Promise<TranscribedWord[]> {
   const bucketName = getGcsBucketName()
   const gcsUri = await uploadToGcs(audioFilePath, bucketName)
 
@@ -86,11 +88,6 @@ export async function transcribeWithDiarization(
         audioChannelCount: 1,
         languageCode,
         enableWordTimeOffsets: true,
-        diarizationConfig: {
-          enableSpeakerDiarization: true,
-          minSpeakerCount: 2,
-          maxSpeakerCount: 6,
-        },
       },
     })
 
@@ -103,7 +100,6 @@ export async function transcribeWithDiarization(
       text: wordInfo.word ?? '',
       startTime: secondsFromDuration(wordInfo.startTime),
       endTime: secondsFromDuration(wordInfo.endTime),
-      speakerTag: wordInfo.speakerTag ?? 0,
     }))
   } finally {
     await deleteFromGcs(gcsUri)
