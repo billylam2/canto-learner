@@ -36,10 +36,20 @@ export const YoutubePlayer = forwardRef<YoutubePlayerHandle, YoutubePlayerProps>
   useImperativeHandle(
     ref,
     () => ({
-      seekTo: (seconds, allowSeekAhead) => playerRef.current?.seekTo(seconds, allowSeekAhead),
-      playVideo: () => playerRef.current?.playVideo(),
-      pauseVideo: () => playerRef.current?.pauseVideo(),
-      getCurrentTime: () => playerRef.current?.getCurrentTime() ?? 0,
+      // The YouTube IFrame API's Player object exists immediately after construction, but its
+      // methods aren't functional until the player's own onReady event fires — calling them
+      // before that throws "X is not a function", so every call is guarded.
+      seekTo: (seconds, allowSeekAhead) => {
+        if (typeof playerRef.current?.seekTo === 'function') playerRef.current.seekTo(seconds, allowSeekAhead)
+      },
+      playVideo: () => {
+        if (typeof playerRef.current?.playVideo === 'function') playerRef.current.playVideo()
+      },
+      pauseVideo: () => {
+        if (typeof playerRef.current?.pauseVideo === 'function') playerRef.current.pauseVideo()
+      },
+      getCurrentTime: () =>
+        typeof playerRef.current?.getCurrentTime === 'function' ? playerRef.current.getCurrentTime() : 0,
     }),
     []
   )

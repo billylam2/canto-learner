@@ -56,6 +56,25 @@ describe('YoutubePlayer', () => {
     expect(ref.current?.getCurrentTime()).toBe(42)
   })
 
+  it('does not throw when imperative handle methods are called before the player is ready', async () => {
+    // The real YT.Player object exists immediately after construction but its methods aren't
+    // functional until onReady fires, so a not-yet-ready player lacks them entirely here.
+    const notReadyPlayer = {}
+    const PlayerCtor = vi.fn(function PlayerCtor() {
+      return notReadyPlayer
+    })
+    vi.mocked(loadYoutubeIframeApi).mockResolvedValue({ Player: PlayerCtor as never })
+
+    const ref = createRef<YoutubePlayerHandle>()
+    render(<YoutubePlayer ref={ref} videoId="video-1" elementId="canto-player" />)
+    await waitFor(() => expect(PlayerCtor).toHaveBeenCalled())
+
+    expect(() => ref.current?.seekTo(10, true)).not.toThrow()
+    expect(() => ref.current?.playVideo()).not.toThrow()
+    expect(() => ref.current?.pauseVideo()).not.toThrow()
+    expect(ref.current?.getCurrentTime()).toBe(0)
+  })
+
   it('calls the onError prop when the underlying player reports an error', async () => {
     const fakePlayer = makeFakePlayer()
     const PlayerCtor = vi.fn(function PlayerCtor() { return fakePlayer })
