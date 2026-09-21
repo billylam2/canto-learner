@@ -167,6 +167,49 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
     }
   }
 
+  const [autoMarkState, setAutoMarkState] = useState<{
+    working: boolean
+    error: string | null
+    warning: string | null
+  }>({
+    working: false,
+    error: null,
+    warning: null,
+  })
+
+  async function runAutoMark() {
+    if (!episode) return
+    setAutoMarkState({ working: true, error: null, warning: null })
+    const response = await fetch(`/api/dub-sync/episodes/${episode.id}/auto-mark`, { method: 'POST' })
+    const body = await response.json()
+    if (!response.ok) {
+      setAutoMarkState({ working: false, error: body.error ?? 'Failed to auto-mark segments', warning: null })
+      return
+    }
+    setSegmentsByEpisode((current) => ({
+      ...current,
+      [episode.id]: [...(current[episode.id] ?? []), ...body.segments],
+    }))
+    setAutoMarkState({ working: false, error: null, warning: body.warning ?? null })
+  }
+
+  const [captionsError, setCaptionsError] = useState<string | null>(null)
+
+  async function runGenerateFromCaptions() {
+    if (!episode) return
+    setCaptionsError(null)
+    const response = await fetch(`/api/dub-sync/episodes/${episode.id}/generate-segments`, { method: 'POST' })
+    const body = await response.json()
+    if (!response.ok) {
+      setCaptionsError(body.error ?? 'Failed to generate segments')
+      return
+    }
+    setSegmentsByEpisode((current) => ({
+      ...current,
+      [episode.id]: [...(current[episode.id] ?? []), ...body.segments],
+    }))
+  }
+
   return (
     <div className="flex gap-6 p-6">
       <aside className="w-64 flex flex-col gap-2">
@@ -216,7 +259,6 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
                 </div>
               </div>
             </div>
-            {/* Auto-mark controls are added in a later task. */}
             {!anchorsSet && <p className="text-gray-500 mb-4">Set anchors before marking segments.</p>}
 
             <div className="flex gap-2 mb-4">
@@ -238,6 +280,31 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
                 Save segment
               </button>
             </div>
+
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={runAutoMark}
+                disabled={!anchorsSet || autoMarkState.working}
+                className="border p-2 rounded"
+              >
+                {autoMarkState.working ? 'Working…' : 'Auto-mark from speech'}
+              </button>
+              <button onClick={runGenerateFromCaptions} disabled={!anchorsSet} className="border p-2 rounded">
+                Generate from captions
+              </button>
+            </div>
+
+            {autoMarkState.error && (
+              <p role="alert" className="text-red-600 mb-4">
+                {autoMarkState.error}
+              </p>
+            )}
+            {autoMarkState.warning && <p className="text-amber-600 mb-4">{autoMarkState.warning}</p>}
+            {captionsError && (
+              <p role="alert" className="text-red-600 mb-4">
+                {captionsError}
+              </p>
+            )}
 
             <SegmentTable
               episodeId={episode.id}

@@ -140,3 +140,124 @@ describe('Admin manual segment creation', () => {
     )
   })
 })
+
+describe('Admin auto-mark and generate from captions', () => {
+  const episodeWithAnchors = {
+    ...episodeA,
+    cantoContentStart: 10,
+    cantoContentEnd: 110,
+    englishContentStart: 20,
+    englishContentEnd: 220,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(YoutubePlayer).mockImplementation(({ elementId }: { elementId: string }) => (
+      <div data-testid={`player-${elementId}`} />
+    ))
+  })
+
+  it('runs auto-mark, shows a working state, and appends returned segments', async () => {
+    let resolveFetch: (value: unknown) => void = () => {}
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockReturnValue(
+        new Promise((resolve) => {
+          resolveFetch = resolve
+        })
+      )
+    )
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-mark from speech' }))
+
+    expect(screen.getByRole('button', { name: 'Working…' })).toBeDisabled()
+
+    resolveFetch({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          segments: [
+            {
+              id: 'seg-1',
+              episodeId: 'ep-a',
+              position: 0,
+              label: null,
+              cantoStart: 10,
+              cantoEnd: 15,
+              englishStart: 20,
+              englishEnd: 26,
+            },
+          ],
+        }),
+    })
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Auto-mark from speech' })).toBeInTheDocument())
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/dub-sync/episodes/ep-a/auto-mark',
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
+
+  it('shows a warning (not an error) when auto-mark falls back to proportional timing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ segments: [], warning: "turn counts didn't match (3 vs 2)" }),
+      })
+    )
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-mark from speech' }))
+
+    await waitFor(() => expect(screen.getByText(/turn counts didn't match/)).toBeInTheDocument())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('shows an error when auto-mark fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, json: () => Promise.resolve({ error: 'yt-dlp not found' }) })
+    )
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-mark from speech' }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('yt-dlp not found'))
+  })
+
+  it('runs generate from captions and appends returned segments', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            segments: [
+              {
+                id: 'seg-2',
+                episodeId: 'ep-a',
+                position: 0,
+                label: null,
+                cantoStart: 10,
+                cantoEnd: 15,
+                englishStart: 20,
+                englishEnd: 26,
+              },
+            ],
+          }),
+      })
+    )
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Generate from captions' }))
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a/generate-segments',
+        expect.objectContaining({ method: 'POST' })
+      )
+    )
+  })
+})
