@@ -77,3 +77,133 @@ describe('Editor anchors', () => {
     expect(screen.getByRole('button', { name: 'Generate from captions' })).toBeEnabled()
   })
 })
+
+describe('Editor manual segment creation', () => {
+  const episodeWithAnchors = {
+    ...baseEpisode,
+    cantoContentStart: 10,
+    cantoContentEnd: 110,
+    englishContentStart: 20,
+    englishContentEnd: 220,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn())
+    vi.mocked(YoutubePlayer).mockImplementation(({ elementId }: { elementId: string }) => (
+      <div data-testid={`player-${elementId}`} />
+    ))
+  })
+
+  it('marks start then end, proposes an english time via normalization, and saves on submit', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          segment: {
+            id: 'seg-1',
+            episodeId: 'ep-1',
+            position: 0,
+            label: null,
+            cantoStart: 20,
+            cantoEnd: 30,
+            englishStart: 40,
+            englishEnd: 60,
+          },
+        }),
+    } as Response)
+
+    render(<Editor episode={episodeWithAnchors} segments={[]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark start' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mark end' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save segment' }))
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-1/segments',
+        expect.objectContaining({ method: 'POST' })
+      )
+    )
+    expect(await screen.findByText(/Segment 1/)).toBeInTheDocument()
+  })
+
+  it('deletes a segment', async () => {
+    vi.mocked(fetch).mockResolvedValue({ ok: true, json: () => Promise.resolve({ ok: true }) } as Response)
+    render(
+      <Editor
+        episode={episodeWithAnchors}
+        segments={[
+          {
+            id: 'seg-1',
+            episodeId: 'ep-1',
+            position: 0,
+            label: 'Hello',
+            cantoStart: 20,
+            cantoEnd: 25,
+            englishStart: 40,
+            englishEnd: 50,
+          },
+        ]}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-1/segments/seg-1',
+        expect.objectContaining({ method: 'DELETE' })
+      )
+    )
+    expect(screen.queryByText('Hello')).not.toBeInTheDocument()
+  })
+
+  it('edits an existing segment boundary and saves it', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          segment: {
+            id: 'seg-1',
+            episodeId: 'ep-1',
+            position: 0,
+            label: 'Hello',
+            cantoStart: 20,
+            cantoEnd: 26.5,
+            englishStart: 40,
+            englishEnd: 50,
+          },
+        }),
+    } as Response)
+    render(
+      <Editor
+        episode={episodeWithAnchors}
+        segments={[
+          {
+            id: 'seg-1',
+            episodeId: 'ep-1',
+            position: 0,
+            label: 'Hello',
+            cantoStart: 20,
+            cantoEnd: 25,
+            englishStart: 40,
+            englishEnd: 50,
+          },
+        ]}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.change(screen.getByLabelText('Cantonese end'), { target: { value: '26.5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-1/segments/seg-1',
+        expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ cantoEnd: 26.5 }) })
+      )
+    )
+    expect(await screen.findByText(/26\.5s/)).toBeInTheDocument()
+  })
+})
