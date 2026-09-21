@@ -258,3 +258,74 @@ export async function deleteSegment(supabase: SupabaseClient, segmentId: string)
     throw new Error(`Failed to delete segment ${segmentId}: ${error.message}`)
   }
 }
+
+export interface CantoWord {
+  id: string
+  episodeId: string
+  text: string
+  startTime: number
+  endTime: number
+}
+
+interface CantoWordRow {
+  id: string
+  episode_id: string
+  text: string
+  start_time: number
+  end_time: number
+}
+
+function toCantoWord(row: CantoWordRow): CantoWord {
+  return {
+    id: row.id,
+    episodeId: row.episode_id,
+    text: row.text,
+    startTime: row.start_time,
+    endTime: row.end_time,
+  }
+}
+
+export interface CreateCantoWordInput {
+  text: string
+  startTime: number
+  endTime: number
+}
+
+export async function replaceCantoWords(
+  supabase: SupabaseClient,
+  episodeId: string,
+  words: CreateCantoWordInput[]
+): Promise<CantoWord[]> {
+  const { error: deleteError } = await supabase.from('dub_canto_words').delete().eq('episode_id', episodeId)
+  if (deleteError) {
+    throw new Error(`Failed to clear existing canto words for episode ${episodeId}: ${deleteError.message}`)
+  }
+
+  if (words.length === 0) return []
+
+  const rows = words.map((word) => ({
+    episode_id: episodeId,
+    text: word.text,
+    start_time: word.startTime,
+    end_time: word.endTime,
+  }))
+
+  const { data, error } = await supabase.from('dub_canto_words').insert(rows).select('*')
+  if (error) {
+    throw new Error(`Failed to save canto words for episode ${episodeId}: ${error.message}`)
+  }
+  return ((data ?? []) as CantoWordRow[]).map(toCantoWord)
+}
+
+export async function listCantoWords(supabase: SupabaseClient, episodeId: string): Promise<CantoWord[]> {
+  const { data, error } = await supabase
+    .from('dub_canto_words')
+    .select('*')
+    .eq('episode_id', episodeId)
+    .order('start_time', { ascending: true })
+
+  if (error) {
+    throw new Error(`Failed to list canto words for episode ${episodeId}: ${error.message}`)
+  }
+  return ((data ?? []) as CantoWordRow[]).map(toCantoWord)
+}

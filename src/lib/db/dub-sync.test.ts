@@ -10,6 +10,8 @@ import {
   listSegments,
   updateSegment,
   deleteSegment,
+  replaceCantoWords,
+  listCantoWords,
 } from './dub-sync'
 
 const episodeRow = {
@@ -322,5 +324,86 @@ describe('deleteSegment', () => {
   it('throws when the delete fails', async () => {
     const supabase = makeDeleteSegmentMock({ error: { message: 'boom' } })
     await expect(deleteSegment(supabase, 'seg-1')).rejects.toThrow('Failed to delete segment seg-1: boom')
+  })
+})
+
+function makeReplaceCantoWordsMock(
+  deleteResult: { error: unknown },
+  insertResult: { data: unknown; error: unknown }
+) {
+  const deleteEq = vi.fn().mockResolvedValue(deleteResult)
+  const del = vi.fn().mockReturnValue({ eq: deleteEq })
+  const insertSelect = vi.fn().mockResolvedValue(insertResult)
+  const insert = vi.fn().mockReturnValue({ select: insertSelect })
+  const from = vi.fn().mockReturnValue({ delete: del, insert })
+  return { from } as unknown as SupabaseClient
+}
+
+describe('replaceCantoWords', () => {
+  it('deletes existing words and inserts the new set, mapped to camelCase', async () => {
+    const supabase = makeReplaceCantoWordsMock(
+      { error: null },
+      {
+        data: [
+          { id: 'w-1', episode_id: 'ep-1', text: '你好', start_time: 1.2, end_time: 1.6 },
+          { id: 'w-2', episode_id: 'ep-1', text: '喬治', start_time: 2.0, end_time: 2.4 },
+        ],
+        error: null,
+      }
+    )
+    const result = await replaceCantoWords(supabase, 'ep-1', [
+      { text: '你好', startTime: 1.2, endTime: 1.6 },
+      { text: '喬治', startTime: 2.0, endTime: 2.4 },
+    ])
+    expect(result).toEqual([
+      { id: 'w-1', episodeId: 'ep-1', text: '你好', startTime: 1.2, endTime: 1.6 },
+      { id: 'w-2', episodeId: 'ep-1', text: '喬治', startTime: 2.0, endTime: 2.4 },
+    ])
+  })
+
+  it('returns an empty array without inserting when given no words', async () => {
+    const supabase = makeReplaceCantoWordsMock({ error: null }, { data: [], error: null })
+    const result = await replaceCantoWords(supabase, 'ep-1', [])
+    expect(result).toEqual([])
+  })
+
+  it('throws when the delete fails', async () => {
+    const supabase = makeReplaceCantoWordsMock({ error: { message: 'boom' } }, { data: [], error: null })
+    await expect(
+      replaceCantoWords(supabase, 'ep-1', [{ text: 'hi', startTime: 0, endTime: 1 }])
+    ).rejects.toThrow('Failed to clear existing canto words for episode ep-1: boom')
+  })
+
+  it('throws when the insert fails', async () => {
+    const supabase = makeReplaceCantoWordsMock({ error: null }, { data: null, error: { message: 'boom' } })
+    await expect(
+      replaceCantoWords(supabase, 'ep-1', [{ text: 'hi', startTime: 0, endTime: 1 }])
+    ).rejects.toThrow('Failed to save canto words for episode ep-1: boom')
+  })
+})
+
+function makeListCantoWordsMock(overrides: { data: unknown; error: unknown }) {
+  const order = vi.fn().mockResolvedValue(overrides)
+  const eq = vi.fn().mockReturnValue({ order })
+  const select = vi.fn().mockReturnValue({ eq })
+  const from = vi.fn().mockReturnValue({ select })
+  return { from } as unknown as SupabaseClient
+}
+
+describe('listCantoWords', () => {
+  it('returns words ordered by start time', async () => {
+    const supabase = makeListCantoWordsMock({
+      data: [{ id: 'w-1', episode_id: 'ep-1', text: '你好', start_time: 1.2, end_time: 1.6 }],
+      error: null,
+    })
+    const result = await listCantoWords(supabase, 'ep-1')
+    expect(result).toEqual([{ id: 'w-1', episodeId: 'ep-1', text: '你好', startTime: 1.2, endTime: 1.6 }])
+  })
+
+  it('throws when the query fails', async () => {
+    const supabase = makeListCantoWordsMock({ data: null, error: { message: 'boom' } })
+    await expect(listCantoWords(supabase, 'ep-1')).rejects.toThrow(
+      'Failed to list canto words for episode ep-1: boom'
+    )
   })
 })
