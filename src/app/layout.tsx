@@ -8,7 +8,7 @@ const baloo2 = Baloo_2({
 })
 
 export const metadata = {
-  title: 'Peppa 豬',
+  title: 'Canto Learner',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

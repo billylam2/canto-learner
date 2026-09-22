@@ -3,6 +3,10 @@ import { createSupabaseServerClient } from '@/lib/supabase/client'
 import { getEpisode, listEpisodes, listSegments } from '@/lib/db/dub-sync'
 import { Player } from './player'
 
+export const metadata = {
+  title: 'Peppa 豬',
+}
+
 export default async function DubSyncEpisodePage({ params }: { params: Promise<{ episodeId: string }> }) {
   const { episodeId } = await params
   const supabase = createSupabaseServerClient()

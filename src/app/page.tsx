@@ -2,6 +2,10 @@ import { redirect } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase/client'
 import { listEpisodes } from '@/lib/db/dub-sync'
 
+export const metadata = {
+  title: 'Peppa 豬',
+}
+
 // The playlist experience (episode + sidebar of every episode) lives at /dub-sync/[episodeId] —
 // this route just lands you on the first one, so / is a stable entry point.
 export default async function HomePage() {
