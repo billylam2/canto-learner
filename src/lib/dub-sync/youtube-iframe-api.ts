@@ -2,6 +2,16 @@ import type { YouTubePlayerLike } from './player-controller'
 
 export interface YouTubePlayerOptions {
   videoId: string
+  width?: number
+  height?: number
+  playerVars?: {
+    // Disables YouTube's own fullscreen button: it fullscreens only the single iframe clicked,
+    // which breaks our Cantonese/English video-swap technique (fullscreen stays locked to
+    // whichever iframe was fullscreened, so swapping visibility to the other video just freezes
+    // the fullscreened one). The player page provides its own fullscreen control instead, which
+    // fullscreens both iframes' shared container so the swap keeps working.
+    fs?: 0 | 1
+  }
   events?: {
     onReady?: () => void
     onError?: () => void

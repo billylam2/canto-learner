@@ -29,7 +29,15 @@ describe('YoutubePlayer', () => {
 
     await waitFor(() => expect(PlayerCtor).toHaveBeenCalled())
     expect(PlayerCtor.mock.calls[0][0]).toBe('canto-player')
-    expect(PlayerCtor.mock.calls[0][1]).toMatchObject({ videoId: 'video-1' })
+    expect(PlayerCtor.mock.calls[0][1]).toMatchObject({
+      videoId: 'video-1',
+      width: 960,
+      height: 540,
+      // YouTube's own fullscreen button fullscreens only its own iframe, which breaks the
+      // Cantonese/English swap technique (see youtube-iframe-api.ts) — disabled in favor of the
+      // player page's own fullscreen control.
+      playerVars: { fs: 0 },
+    })
 
     const onReady = PlayerCtor.mock.calls[0][1].events.onReady
     onReady()

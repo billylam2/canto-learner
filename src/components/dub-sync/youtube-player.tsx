@@ -32,6 +32,9 @@ export const YoutubePlayer = forwardRef<YoutubePlayerHandle, YoutubePlayerProps>
       if (cancelled) return
       playerRef.current = new Player(elementId, {
         videoId,
+        width: 960,
+        height: 540,
+        playerVars: { fs: 0 },
         events: { onReady: () => setReady(true), onError: () => onErrorRef.current?.() },
       })
     })

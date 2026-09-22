@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, act } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('@/components/dub-sync/youtube-player', () => ({
   YoutubePlayer: vi.fn(({ elementId }: { elementId: string }) => <div data-testid={`player-${elementId}`} />),
@@ -17,6 +17,7 @@ vi.mock('@/lib/dub-sync/player-controller', async () => {
           onDone?.()
         }),
         playBoth: vi.fn(),
+        playEpisodeAlternating: vi.fn(),
         stop: vi.fn(),
       }
     }),
@@ -173,6 +174,92 @@ describe('Player', () => {
       expect(cantoHandle.pauseVideo).not.toHaveBeenCalled()
       expect(getController().playSegment).not.toHaveBeenCalled()
       expect(screen.getByText('No line to replay yet.')).toBeInTheDocument()
+    })
+  })
+
+  describe('Play alternating', () => {
+    it('starts alternating playback from the current position and toggles to Stop alternating', () => {
+      mockCantoPlayerHandle(7)
+
+      render(<Player episode={episode} segments={segments} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Play alternating' }))
+
+      expect(getController().playEpisodeAlternating).toHaveBeenCalledWith(segments, 7)
+      expect(screen.getByRole('button', { name: 'Stop alternating' })).toBeInTheDocument()
+    })
+
+    it('stops the controller and toggles back when clicked again', () => {
+      mockCantoPlayerHandle(7)
+
+      render(<Player episode={episode} segments={segments} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Play alternating' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Stop alternating' }))
+
+      expect(getController().stop).toHaveBeenCalled()
+      expect(screen.getByRole('button', { name: 'Play alternating' })).toBeInTheDocument()
+    })
+
+    it('disables Replay in English while alternating playback is running', () => {
+      mockCantoPlayerHandle(7)
+
+      render(<Player episode={episode} segments={segments} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Play alternating' }))
+
+      expect(screen.getByRole('button', { name: 'Replay in English' })).toBeDisabled()
+    })
+  })
+
+  describe('Fullscreen', () => {
+    const originalRequestFullscreen = Element.prototype.requestFullscreen
+    const originalExitFullscreen = document.exitFullscreen
+
+    beforeEach(() => {
+      Element.prototype.requestFullscreen = vi.fn(function (this: HTMLElement) {
+        Object.defineProperty(document, 'fullscreenElement', { value: this, configurable: true })
+        document.dispatchEvent(new Event('fullscreenchange'))
+        return Promise.resolve()
+      })
+      document.exitFullscreen = vi.fn(() => {
+        Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true })
+        document.dispatchEvent(new Event('fullscreenchange'))
+        return Promise.resolve()
+      })
+    })
+
+    afterEach(() => {
+      Element.prototype.requestFullscreen = originalRequestFullscreen
+      document.exitFullscreen = originalExitFullscreen
+      Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true })
+    })
+
+    // The browser's own fullscreen exit (Esc key) doesn't go through our code — it just changes
+    // document.fullscreenElement and fires 'fullscreenchange', which is what this simulates.
+    function simulateBrowserExitFullscreen() {
+      Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true })
+      document.dispatchEvent(new Event('fullscreenchange'))
+    }
+
+    it('requests fullscreen on the shared video+controls container and hides all controls', async () => {
+      render(<Player episode={episode} segments={segments} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Fullscreen' }))
+
+      expect(Element.prototype.requestFullscreen).toHaveBeenCalled()
+      // No controls overlay the video in fullscreen (they'd otherwise sit on top of captions).
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Fullscreen' })).not.toBeInTheDocument())
+      expect(screen.queryByRole('button', { name: 'Replay in English' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Play alternating' })).not.toBeInTheDocument()
+    })
+
+    it('restores the controls once the browser exits fullscreen', async () => {
+      render(<Player episode={episode} segments={segments} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Fullscreen' }))
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Fullscreen' })).not.toBeInTheDocument())
+
+      simulateBrowserExitFullscreen()
+
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Fullscreen' })).toBeInTheDocument())
+      expect(screen.getByRole('button', { name: 'Replay in English' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Play alternating' })).toBeInTheDocument()
     })
   })
 })

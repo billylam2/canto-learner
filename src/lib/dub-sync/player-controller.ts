@@ -13,6 +13,13 @@ export interface PlaybackSegment {
   end: number
 }
 
+export interface AlternatingSegment {
+  cantoStart: number
+  cantoEnd: number
+  englishStart: number
+  englishEnd: number
+}
+
 export class SegmentPlaybackController {
   private timer: ReturnType<typeof setInterval> | null = null
 
@@ -42,6 +49,41 @@ export class SegmentPlaybackController {
     this.playSegment('canto', cantoSegment, () => {
       this.playSegment('english', englishSegment)
     })
+  }
+
+  // Plays the Cantonese video continuously from startTime, only ever intervening at each
+  // marked segment's cantoEnd: pausing Cantonese, playing that segment's English audio, then
+  // resuming Cantonese from exactly where it left off. Everything else — gaps between segments,
+  // and the Cantonese portion of each segment itself — is untouched native playback, so only
+  // marked segments alternate languages; unmarked stretches stay in Cantonese throughout.
+  playEpisodeAlternating(segments: AlternatingSegment[], startTime: number): void {
+    this.stop()
+    const sorted = [...segments].sort((a, b) => a.cantoStart - b.cantoStart)
+    const cantoPlayer = this.getPlayer('canto')
+    this.onLanguageChange('canto')
+    cantoPlayer.seekTo(startTime, true)
+    cantoPlayer.playVideo()
+    const startIndex = sorted.findIndex((segment) => segment.cantoEnd > startTime)
+    this.watchForSegmentEnd(sorted, startIndex)
+  }
+
+  private watchForSegmentEnd(segments: AlternatingSegment[], index: number): void {
+    if (index === -1 || index >= segments.length) return
+    const segment = segments[index]
+    const cantoPlayer = this.getPlayer('canto')
+
+    this.timer = setInterval(() => {
+      if (cantoPlayer.getCurrentTime() >= segment.cantoEnd) {
+        this.stop()
+        cantoPlayer.pauseVideo()
+        this.playSegment('english', { start: segment.englishStart, end: segment.englishEnd }, () => {
+          this.onLanguageChange('canto')
+          cantoPlayer.seekTo(segment.cantoEnd, true)
+          cantoPlayer.playVideo()
+          this.watchForSegmentEnd(segments, index + 1)
+        })
+      }
+    }, this.pollIntervalMs)
   }
 
   stop(): void {
