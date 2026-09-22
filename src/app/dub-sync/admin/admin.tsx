@@ -5,7 +5,6 @@ import { YoutubePlayer, type YoutubePlayerHandle } from '@/components/dub-sync/y
 import type { CantoWord, DubEpisode, DubSegment } from '@/lib/db/dub-sync'
 import { englishTimeFor, type EpisodeAnchors } from '@/lib/dub-sync/normalize'
 import { computeResyncTarget } from '@/lib/dub-sync/synced-playback'
-import { findNextWordStart } from '@/lib/dub-sync/next-word-start'
 import { NewEpisodeForm } from './new-episode-form'
 import { SegmentTable } from './segment-table'
 import { AnchorFields } from './anchor-fields'
@@ -50,7 +49,6 @@ export function Admin({
     () => (selectedEpisodeId ? (segmentsByEpisode[selectedEpisodeId] ?? []) : []),
     [selectedEpisodeId, segmentsByEpisode]
   )
-  const cantoWords = selectedEpisodeId ? (cantoWordsByEpisode[selectedEpisodeId] ?? []) : []
 
   function handleEpisodeCreated(newEpisode: DubEpisode) {
     setEpisodes((current) => [...current, newEpisode])
@@ -302,40 +300,6 @@ export function Admin({
     }
   }, [syncing, episode, anchorsSet, segments])
 
-  async function markSegmentEnd() {
-    if (!episode || !anchorsSet) return
-    const anchors = episode as DubEpisode & EpisodeAnchors
-    const cantoEnd = cantoPlayerRef.current?.getCurrentTime() ?? 0
-    const englishEnd = englishTimeFor(cantoEnd, anchors)
-
-    const previousEnd =
-      nextSegmentStartFloorRef.current[episode.id] ??
-      (segments.length > 0 ? segments[segments.length - 1].cantoEnd : anchors.cantoContentStart)
-    const nextWordStart = findNextWordStart(cantoWords, previousEnd, anchors.cantoContentEnd)
-    const cantoStart = nextWordStart ?? previousEnd
-    const englishStart = englishTimeFor(cantoStart, anchors)
-
-    // Advance the floor synchronously, before the request even goes out, so a rapid next press
-    // can't compute the same start from stale segments state.
-    nextSegmentStartFloorRef.current[episode.id] = cantoEnd
-
-    const response = await fetch(`/api/dub-sync/episodes/${episode.id}/segments`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ cantoStart, cantoEnd, englishStart, englishEnd }),
-    })
-    if (!response.ok) {
-      // Roll back the optimistic advance so a retry starts from the same point.
-      nextSegmentStartFloorRef.current[episode.id] = previousEnd
-      return
-    }
-    const { segment } = await response.json()
-    setSegmentsByEpisode((current) => ({
-      ...current,
-      [episode.id]: [...(current[episode.id] ?? []), segment],
-    }))
-  }
-
   const [captionsError, setCaptionsError] = useState<string | null>(null)
 
   async function runGenerateFromCaptions() {
@@ -435,9 +399,6 @@ export function Admin({
               </button>
               <button onClick={goToContentStart} disabled={!anchorsSet} className="border p-2 rounded">
                 Go to content start
-              </button>
-              <button onClick={markSegmentEnd} disabled={!anchorsSet} className="border p-2 rounded">
-                Mark segment end
               </button>
             </div>
 
