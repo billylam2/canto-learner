@@ -44,10 +44,16 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
     [selectedEpisodeId, segmentsByEpisode]
   )
 
+  function selectEpisode(id: string) {
+    setSelectedEpisodeId(id)
+    setRefineSuggestion(null)
+    setRefineError(null)
+  }
+
   function handleEpisodeCreated(newEpisode: DubEpisode) {
     setEpisodes((current) => [...current, newEpisode])
     setSegmentsByEpisode((current) => ({ ...current, [newEpisode.id]: [] }))
-    setSelectedEpisodeId(newEpisode.id)
+    selectEpisode(newEpisode.id)
   }
 
   function updateEpisodeInPlace(updated: DubEpisode) {
@@ -179,6 +185,43 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
   }
 
   const anchorsSet = episode ? hasAllAnchors(episode) : false
+  const canRefineAlignment = episode ? episode.cantoContentStart !== null && episode.englishContentStart !== null : false
+
+  interface RefineSuggestion {
+    suggestedEnglishContentStart: number
+    offsetSeconds: number
+    avgDistance: number
+    confident: boolean
+  }
+  const [refining, setRefining] = useState(false)
+  const [refineSuggestion, setRefineSuggestion] = useState<RefineSuggestion | null>(null)
+  const [refineError, setRefineError] = useState<string | null>(null)
+
+  async function runRefineAlignment() {
+    if (!episode) return
+    setRefining(true)
+    setRefineError(null)
+    setRefineSuggestion(null)
+    const response = await fetch(`/api/dub-sync/episodes/${episode.id}/refine-alignment`, { method: 'POST' })
+    setRefining(false)
+    const body = await response.json()
+    if (!response.ok) {
+      setRefineError(body.error ?? 'Failed to refine alignment')
+      return
+    }
+    setRefineSuggestion(body)
+  }
+
+  function applyRefineSuggestion() {
+    if (!episode || !refineSuggestion) return
+    saveAnchors({
+      cantoContentStart: episode.cantoContentStart ?? 0,
+      cantoContentEnd: episode.cantoContentEnd ?? 0,
+      englishContentStart: refineSuggestion.suggestedEnglishContentStart,
+      englishContentEnd: episode.englishContentEnd ?? 0,
+    })
+    setRefineSuggestion(null)
+  }
 
   function handleSegmentUpdated(updated: DubSegment) {
     if (!selectedEpisodeId) return
@@ -348,7 +391,7 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
           {episodes.map((candidate) => (
             <li key={candidate.id}>
               <button
-                onClick={() => setSelectedEpisodeId(candidate.id)}
+                onClick={() => selectEpisode(candidate.id)}
                 className={`text-left w-full p-1 rounded ${candidate.id === selectedEpisodeId ? 'bg-gray-200' : ''}`}
               >
                 {candidate.title}
@@ -407,6 +450,34 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
                 />
               </div>
             </div>
+            {canRefineAlignment && (
+              <div className="mb-4">
+                <button onClick={runRefineAlignment} disabled={refining} className="border p-2 rounded">
+                  {refining ? 'Refining…' : 'Refine precision'}
+                </button>
+                {refineError && (
+                  <p role="alert" className="text-red-600 mt-2">
+                    {refineError}
+                  </p>
+                )}
+                {refineSuggestion && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <p>
+                      Suggested English start: {refineSuggestion.suggestedEnglishContentStart.toFixed(2)} (offset{' '}
+                      {refineSuggestion.offsetSeconds.toFixed(2)}s
+                      {refineSuggestion.confident ? '' : ', low confidence'})
+                    </p>
+                    <button onClick={applyRefineSuggestion} className="border p-1 rounded">
+                      Apply
+                    </button>
+                    <button onClick={() => setRefineSuggestion(null)} className="border p-1 rounded">
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {!anchorsSet && <p className="text-gray-500 mb-4">Set anchors before marking segments.</p>}
 
             <div className="flex gap-2 mb-4">

@@ -165,6 +165,130 @@ describe('Admin', () => {
   })
 })
 
+describe('Admin refine alignment', () => {
+  const episodeWithBothStarts = {
+    ...episodeA,
+    cantoContentStart: 15.7394,
+    englishContentStart: 14.7089,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn())
+    vi.mocked(YoutubePlayer).mockImplementation(({ elementId }: { elementId: string }) => (
+      <div data-testid={`player-${elementId}`} />
+    ))
+  })
+
+  it('does not show the refine-precision button until both content starts are marked', () => {
+    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    expect(screen.queryByRole('button', { name: 'Refine precision' })).not.toBeInTheDocument()
+  })
+
+  it('runs refinement and shows an apply/dismiss suggestion', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          suggestedEnglishContentStart: 14.8089,
+          offsetSeconds: 0.1,
+          avgDistance: 2.24,
+          confident: true,
+        }),
+    } as Response)
+
+    render(<Admin episodes={[episodeWithBothStarts]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Refine precision' }))
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a/refine-alignment',
+        expect.objectContaining({ method: 'POST' })
+      )
+    )
+    expect(await screen.findByRole('button', { name: 'Apply' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument()
+    expect(screen.getByText(/14\.81/)).toBeInTheDocument()
+  })
+
+  it('applies the suggested englishContentStart while keeping other anchors unchanged', async () => {
+    vi.mocked(fetch).mockImplementation((url: unknown, init?: RequestInit) => {
+      const u = String(url)
+      if (u.includes('refine-alignment')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              suggestedEnglishContentStart: 14.8089,
+              offsetSeconds: 0.1,
+              avgDistance: 2.24,
+              confident: true,
+            }),
+        } as Response)
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            episode: { ...episodeWithBothStarts, englishContentStart: 14.8089 },
+          }),
+      } as Response)
+    })
+
+    render(<Admin episodes={[episodeWithBothStarts]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Refine precision' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Apply' }))
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({
+            cantoContentStart: 15.7394,
+            cantoContentEnd: 0,
+            englishContentStart: 14.8089,
+            englishContentEnd: 0,
+          }),
+        })
+      )
+    )
+    expect(screen.queryByRole('button', { name: 'Apply' })).not.toBeInTheDocument()
+  })
+
+  it('dismisses the suggestion without saving anything', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          suggestedEnglishContentStart: 14.8089,
+          offsetSeconds: 0.1,
+          avgDistance: 2.24,
+          confident: true,
+        }),
+    } as Response)
+
+    render(<Admin episodes={[episodeWithBothStarts]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Refine precision' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Dismiss' }))
+
+    expect(screen.queryByRole('button', { name: 'Apply' })).not.toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledTimes(1) // only the refine-alignment call, never a PATCH
+  })
+
+  it('shows an error message when refinement fails', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      json: () => Promise.resolve({ error: 'Failed to refine alignment: yt-dlp exited with code 1' }),
+    } as Response)
+
+    render(<Admin episodes={[episodeWithBothStarts]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Refine precision' }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('yt-dlp exited with code 1'))
+  })
+})
+
 describe('Admin generate from captions', () => {
   const episodeWithAnchors = {
     ...episodeA,
