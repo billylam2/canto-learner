@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { YoutubePlayer, type YoutubePlayerHandle } from '@/components/dub-sync/youtube-player'
 import type { CantoWord, DubEpisode, DubSegment } from '@/lib/db/dub-sync'
 import { englishTimeFor, type EpisodeAnchors } from '@/lib/dub-sync/normalize'
@@ -43,9 +43,13 @@ export function Admin({
   // before the request even goes out, so each press always sees the immediately preceding one's
   // end regardless of network timing.
   const nextSegmentStartFloorRef = useRef<Record<string, number>>({})
+  const pendingSegmentStartRef = useRef<number | null>(null)
 
   const episode = episodes.find((candidate) => candidate.id === selectedEpisodeId) ?? null
-  const segments = selectedEpisodeId ? (segmentsByEpisode[selectedEpisodeId] ?? []) : []
+  const segments = useMemo(
+    () => (selectedEpisodeId ? (segmentsByEpisode[selectedEpisodeId] ?? []) : []),
+    [selectedEpisodeId, segmentsByEpisode]
+  )
   const cantoWords = selectedEpisodeId ? (cantoWordsByEpisode[selectedEpisodeId] ?? []) : []
 
   function handleEpisodeCreated(newEpisode: DubEpisode) {
@@ -242,6 +246,62 @@ export function Admin({
     return () => clearInterval(interval)
   }, [syncing, episode, anchorsSet])
 
+  // Space bar is the marking key while synced playback is running: hold it down for as long as a
+  // character/narrator is speaking, release when they stop. The segment's end is the release
+  // time; its start is half a second before the press (reaction-time offset), clamped to the
+  // same synchronous per-episode floor `nextSegmentStartFloorRef` already tracks, so it can never
+  // overlap the previous segment even if the press lands a little early.
+  useEffect(() => {
+    if (!syncing || !episode || !anchorsSet) return
+    const anchors = episode as DubEpisode & EpisodeAnchors
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.code !== 'Space' || event.repeat) return
+      event.preventDefault()
+      const cantoTime = cantoPlayerRef.current?.getCurrentTime() ?? 0
+      const floor =
+        nextSegmentStartFloorRef.current[episode.id] ??
+        (segments.length > 0 ? segments[segments.length - 1].cantoEnd : anchors.cantoContentStart)
+      pendingSegmentStartRef.current = Math.max(cantoTime - 0.5, floor)
+    }
+
+    async function handleKeyUp(event: KeyboardEvent) {
+      if (event.code !== 'Space' || pendingSegmentStartRef.current === null) return
+      event.preventDefault()
+      const cantoStart = pendingSegmentStartRef.current
+      pendingSegmentStartRef.current = null
+
+      const cantoEnd = cantoPlayerRef.current?.getCurrentTime() ?? 0
+      if (cantoEnd <= cantoStart) return
+
+      const englishStart = englishTimeFor(cantoStart, anchors)
+      const englishEnd = englishTimeFor(cantoEnd, anchors)
+      nextSegmentStartFloorRef.current[episode.id] = cantoEnd
+
+      const response = await fetch(`/api/dub-sync/episodes/${episode.id}/segments`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ cantoStart, cantoEnd, englishStart, englishEnd }),
+      })
+      if (!response.ok) {
+        nextSegmentStartFloorRef.current[episode.id] = cantoStart
+        return
+      }
+      const { segment } = await response.json()
+      setSegmentsByEpisode((current) => ({
+        ...current,
+        [episode.id]: [...(current[episode.id] ?? []), segment],
+      }))
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [syncing, episode, anchorsSet, segments])
+
   async function markSegmentEnd() {
     if (!episode || !anchorsSet) return
     const anchors = episode as DubEpisode & EpisodeAnchors
@@ -380,6 +440,10 @@ export function Admin({
                 Mark segment end
               </button>
             </div>
+
+            {syncing && (
+              <p className="text-gray-500 mb-4">Hold SPACE while a character is speaking, release when they stop.</p>
+            )}
 
             {transcribeState.error && (
               <p role="alert" className="text-red-600 mb-4">

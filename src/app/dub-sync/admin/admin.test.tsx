@@ -559,3 +559,212 @@ describe('Admin play segment from the segment table', () => {
     expect(screen.getByRole('button', { name: 'Pause synced' })).toBeInTheDocument()
   })
 })
+
+describe('Admin spacebar marking', () => {
+  const episodeWithAnchors = {
+    ...episodeA,
+    cantoContentStart: 10,
+    cantoContentEnd: 110,
+    englishContentStart: 20,
+    englishContentEnd: 220,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  it('creates a segment from a press-and-release cycle, offsetting the start by 0.5s', async () => {
+    const refs = captureRefs()
+    let cantoTime = 20
+    const cantoHandle = makeHandle(() => cantoTime)
+    const englishHandle = makeHandle(() => 0)
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          segment: {
+            id: 'seg-1',
+            episodeId: 'ep-a',
+            position: 0,
+            label: null,
+            cantoStart: 19.5,
+            cantoEnd: 30,
+            englishStart: 39,
+            englishEnd: 60,
+          },
+        }),
+    } as Response)
+
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{ 'ep-a': [] }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
+    refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+
+    fireEvent.keyDown(window, { code: 'Space' })
+    cantoTime = 30
+    fireEvent.keyUp(window, { code: 'Space' })
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a/segments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ cantoStart: 19.5, cantoEnd: 30, englishStart: 39, englishEnd: 60 }),
+        })
+      )
+    )
+  })
+
+  it('clamps the start to the previous segment end when the 0.5s offset would overlap it', async () => {
+    const refs = captureRefs()
+    let cantoTime = 35.2
+    const cantoHandle = makeHandle(() => cantoTime)
+    const englishHandle = makeHandle(() => 0)
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          segment: {
+            id: 'seg-2',
+            episodeId: 'ep-a',
+            position: 1,
+            label: null,
+            cantoStart: 35,
+            cantoEnd: 45,
+            englishStart: 70,
+            englishEnd: 90,
+          },
+        }),
+    } as Response)
+
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{
+          'ep-a': [
+            { id: 'seg-1', episodeId: 'ep-a', position: 0, label: null, cantoStart: 15, cantoEnd: 35, englishStart: 30, englishEnd: 70 },
+          ],
+        }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
+    refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+
+    // Pressed at 35.2, so an unclamped -0.5s offset would be 34.7 — before the previous
+    // segment's end (35). The clamp must keep the start at 35, not 34.7.
+    fireEvent.keyDown(window, { code: 'Space' })
+    cantoTime = 45
+    fireEvent.keyUp(window, { code: 'Space' })
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a/segments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ cantoStart: 35, cantoEnd: 45, englishStart: 70, englishEnd: 90 }),
+        })
+      )
+    )
+  })
+
+  it('discards the press without posting when release is not after the clamped start', () => {
+    const refs = captureRefs()
+    let cantoTime = 5 // before the content-start anchor (10)
+    const cantoHandle = makeHandle(() => cantoTime)
+    const englishHandle = makeHandle(() => 0)
+
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{ 'ep-a': [] }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
+    refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+
+    // pressed at 5, -0.5 = 4.5, but the floor (content start) clamps pendingStart to 10
+    fireEvent.keyDown(window, { code: 'Space' })
+    cantoTime = 8 // released before the clamped start (10)
+    fireEvent.keyUp(window, { code: 'Space' })
+
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('does not restart the pending start on a key-repeat keydown while held', async () => {
+    const refs = captureRefs()
+    let cantoTime = 20
+    const cantoHandle = makeHandle(() => cantoTime)
+    const englishHandle = makeHandle(() => 0)
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          segment: {
+            id: 'seg-1',
+            episodeId: 'ep-a',
+            position: 0,
+            label: null,
+            cantoStart: 19.5,
+            cantoEnd: 30,
+            englishStart: 39,
+            englishEnd: 60,
+          },
+        }),
+    } as Response)
+
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{ 'ep-a': [] }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
+    refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+
+    fireEvent.keyDown(window, { code: 'Space' }) // real press at 20 -> pendingStart 19.5
+    cantoTime = 25
+    // OS auto-repeat while the key stays held must be ignored, not recompute pendingStart from 25
+    fireEvent.keyDown(window, { code: 'Space', repeat: true })
+    cantoTime = 30
+    fireEvent.keyUp(window, { code: 'Space' })
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a/segments',
+        expect.objectContaining({
+          body: JSON.stringify({ cantoStart: 19.5, cantoEnd: 30, englishStart: 39, englishEnd: 60 }),
+        })
+      )
+    )
+  })
+
+  it('does nothing when synced playback is not running', () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 20)
+    const englishHandle = makeHandle(() => 0)
+
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{ 'ep-a': [] }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
+    refs.assign(cantoHandle, englishHandle)
+    // deliberately do not click "Play synced"
+
+    fireEvent.keyDown(window, { code: 'Space' })
+    fireEvent.keyUp(window, { code: 'Space' })
+
+    expect(fetch).not.toHaveBeenCalled()
+  })
+})
