@@ -6,7 +6,7 @@ import { Header } from '@/components/ui/header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
-export default function SignupPage() {
+export default function SigninPage() {
   const router = useRouter()
   const [username, setUsername] = useState('')
   const [pin, setPin] = useState('')
@@ -18,7 +18,7 @@ export default function SignupPage() {
     setError(null)
     setSubmitting(true)
 
-    const response = await fetch('/api/signup', {
+    const response = await fetch('/api/login', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ username, pin }),
@@ -32,7 +32,7 @@ export default function SignupPage() {
       return
     }
 
-    router.push('/login')
+    router.push('/play')
     router.refresh()
   }
 
@@ -41,7 +41,7 @@ export default function SignupPage() {
       <Header />
       <main className="max-w-md mx-auto p-4">
         <Card>
-          <h1 className="text-2xl font-extrabold text-brand-ink mb-4">Create your account</h1>
+          <h1 className="text-2xl font-extrabold text-brand-ink mb-4">Log in</h1>
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <label htmlFor="username" className="font-bold text-brand-ink">
               Username
@@ -72,7 +72,7 @@ export default function SignupPage() {
               </p>
             )}
             <Button type="submit" disabled={submitting}>
-              {submitting ? 'Creating...' : 'Create account'}
+              {submitting ? 'Logging in...' : 'Log in'}
             </Button>
           </form>
         </Card>

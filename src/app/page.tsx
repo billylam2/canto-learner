@@ -1,14 +1,21 @@
-import { cookies } from 'next/headers'
-import { readSessionFromCookieValue, COOKIE_NAME } from '@/lib/auth/session'
-import { GuestHome, AuthenticatedHome } from './home-views'
+import { redirect } from 'next/navigation'
+import { createSupabaseServerClient } from '@/lib/supabase/client'
+import { listEpisodes } from '@/lib/db/dub-sync'
 
+// The playlist experience (episode + sidebar of every episode) lives at /dub-sync/[episodeId] —
+// this route just lands you on the first one, so / is a stable entry point.
 export default async function HomePage() {
-  const cookieStore = await cookies()
-  const session = await readSessionFromCookieValue(cookieStore.get(COOKIE_NAME)?.value)
+  const supabase = createSupabaseServerClient()
+  const episodes = await listEpisodes(supabase)
 
-  if (!session) {
-    return <GuestHome />
+  if (episodes.length === 0) {
+    return (
+      <main className="max-w-2xl mx-auto p-6">
+        <h1 className="text-2xl font-bold mb-4">Peppa 豬</h1>
+        <p className="text-gray-500">No episodes yet.</p>
+      </main>
+    )
   }
 
-  return <AuthenticatedHome username={session.username} />
+  redirect(`/dub-sync/${episodes[0].id}`)
 }

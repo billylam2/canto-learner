@@ -14,8 +14,8 @@ describe('GuestHome', () => {
   it('shows a prominent guest-play action alongside signup and login links', () => {
     render(<GuestHome />)
     expect(screen.getByRole('link', { name: 'Play as guest' })).toHaveAttribute('href', '/play')
-    expect(screen.getByText('Create an account')).toBeInTheDocument()
-    expect(screen.getByText('Log in')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Create an account' })).toHaveAttribute('href', '/signup')
+    expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/signin')
   })
 })
 
@@ -30,10 +30,10 @@ describe('AuthenticatedHome', () => {
     expect(screen.getByText('Welcome back, mimi!')).toBeInTheDocument()
   })
 
-  it('logs out via the header and navigates to the main page', async () => {
+  it('logs out via the header and navigates to the login gate', async () => {
     render(<AuthenticatedHome username="mimi" />)
     fireEvent.click(screen.getByRole('button', { name: /log out/i }))
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/'))
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/login'))
   })
 
   it('links to the play page', () => {

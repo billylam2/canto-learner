@@ -1,47 +1,30 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
 
-const pushMock = vi.fn()
-const refreshMock = vi.fn()
-
+const getMock = vi.fn()
+vi.mock('next/headers', () => ({
+  cookies: async () => ({ get: getMock }),
+}))
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: pushMock, refresh: refreshMock }),
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }))
 
 import LoginPage from './page'
 
 describe('LoginPage', () => {
-  beforeEach(() => {
-    pushMock.mockClear()
-    refreshMock.mockClear()
-    global.fetch = vi.fn()
+  it('shows the guest view when there is no session cookie', async () => {
+    getMock.mockReturnValue(undefined)
+    render(await LoginPage())
+    expect(screen.getByText('Create an account')).toBeInTheDocument()
   })
 
-  it('submits the form and redirects to the play page on success', async () => {
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: true,
-      json: async () => ({ id: '1', username: 'mimi' }),
-    } as Response)
+  it('shows the authenticated view when a valid session cookie is present', async () => {
+    process.env.SESSION_SECRET = 'a'.repeat(32)
+    const { createSessionCookieValue } = await import('@/lib/auth/session')
+    const cookieValue = await createSessionCookieValue({ kidId: 'kid-1', username: 'mimi' })
+    getMock.mockReturnValue({ value: cookieValue })
 
-    render(<LoginPage />)
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'mimi' } })
-    fireEvent.change(screen.getByLabelText('4-digit PIN'), { target: { value: '4821' } })
-    fireEvent.click(screen.getByRole('button', { name: /log in/i }))
-
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/play'))
-  })
-
-  it('shows an error message when login fails', async () => {
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: false,
-      json: async () => ({ error: 'Incorrect username or PIN' }),
-    } as Response)
-
-    render(<LoginPage />)
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'mimi' } })
-    fireEvent.change(screen.getByLabelText('4-digit PIN'), { target: { value: '0000' } })
-    fireEvent.click(screen.getByRole('button', { name: /log in/i }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect username or PIN')
+    render(await LoginPage())
+    expect(screen.getByText('Welcome back, mimi!')).toBeInTheDocument()
   })
 })

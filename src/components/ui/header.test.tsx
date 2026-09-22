@@ -48,7 +48,7 @@ describe('Header', () => {
     fireEvent.click(screen.getByRole('button', { name: /log out/i }))
 
     expect(global.fetch).toHaveBeenCalledWith('/api/logout', { method: 'POST' })
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/'))
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/login'))
   })
 
   it('does not show a reset-progress button by default', () => {
@@ -61,7 +61,7 @@ describe('Header', () => {
     fireEvent.click(screen.getByRole('button', { name: /reset progress/i }))
 
     expect(clearGuestProgressMock).toHaveBeenCalled()
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/'))
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/login'))
     expect(refreshMock).toHaveBeenCalled()
   })
 })

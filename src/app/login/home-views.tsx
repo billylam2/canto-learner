@@ -18,7 +18,7 @@ export function GuestHome() {
             <LinkButton href="/signup" variant="secondary" className="w-full">
               Create an account
             </LinkButton>
-            <LinkButton href="/login" variant="secondary" className="w-full">
+            <LinkButton href="/signin" variant="secondary" className="w-full">
               Log in
             </LinkButton>
           </div>

@@ -15,13 +15,13 @@ export function Header({ showBackLink = false, showLogout = false, showResetGues
 
   async function handleLogout() {
     await fetch('/api/logout', { method: 'POST' })
-    router.push('/')
+    router.push('/login')
     router.refresh()
   }
 
   function handleResetGuestProgress() {
     clearGuestProgress()
-    router.push('/')
+    router.push('/login')
     router.refresh()
   }
 

@@ -1,30 +1,45 @@
 import { render, screen } from '@testing-library/react'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const getMock = vi.fn()
-vi.mock('next/headers', () => ({
-  cookies: async () => ({ get: getMock }),
-}))
+const redirectMock = vi.fn()
+
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  redirect: (url: string) => {
+    redirectMock(url)
+    throw new Error(`REDIRECT:${url}`)
+  },
+}))
+vi.mock('@/lib/supabase/client', () => ({
+  createSupabaseServerClient: vi.fn(() => ({})),
+}))
+vi.mock('@/lib/db/dub-sync', () => ({
+  listEpisodes: vi.fn(),
 }))
 
 import HomePage from './page'
+import { listEpisodes } from '@/lib/db/dub-sync'
 
 describe('HomePage', () => {
-  it('shows the guest view when there is no session cookie', async () => {
-    getMock.mockReturnValue(undefined)
-    render(await HomePage())
-    expect(screen.getByText('Create an account')).toBeInTheDocument()
+  beforeEach(() => {
+    redirectMock.mockClear()
   })
 
-  it('shows the authenticated view when a valid session cookie is present', async () => {
-    process.env.SESSION_SECRET = 'a'.repeat(32)
-    const { createSessionCookieValue } = await import('@/lib/auth/session')
-    const cookieValue = await createSessionCookieValue({ kidId: 'kid-1', username: 'mimi' })
-    getMock.mockReturnValue({ value: cookieValue })
+  it('redirects to the first episode when episodes exist', async () => {
+    vi.mocked(listEpisodes).mockResolvedValue([
+      { id: 'ep-a', title: 'A', cantoneseVideoId: 'c1', englishVideoId: 'e1', cantoContentStart: null, cantoContentEnd: null, englishContentStart: null, englishContentEnd: null },
+      { id: 'ep-b', title: 'B', cantoneseVideoId: 'c2', englishVideoId: 'e2', cantoContentStart: null, cantoContentEnd: null, englishContentStart: null, englishContentEnd: null },
+    ])
+
+    await expect(HomePage()).rejects.toThrow('REDIRECT:/dub-sync/ep-a')
+    expect(redirectMock).toHaveBeenCalledWith('/dub-sync/ep-a')
+  })
+
+  it('shows an empty message instead of redirecting when there are no episodes', async () => {
+    vi.mocked(listEpisodes).mockResolvedValue([])
 
     render(await HomePage())
-    expect(screen.getByText('Welcome back, mimi!')).toBeInTheDocument()
+
+    expect(redirectMock).not.toHaveBeenCalled()
+    expect(screen.getByText('No episodes yet.')).toBeInTheDocument()
   })
 })

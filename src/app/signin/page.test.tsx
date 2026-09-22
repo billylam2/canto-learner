@@ -8,40 +8,40 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock, refresh: refreshMock }),
 }))
 
-import SignupPage from './page'
+import SigninPage from './page'
 
-describe('SignupPage', () => {
+describe('SigninPage', () => {
   beforeEach(() => {
     pushMock.mockClear()
     refreshMock.mockClear()
     global.fetch = vi.fn()
   })
 
-  it('submits the form and redirects on success', async () => {
+  it('submits the form and redirects to the play page on success', async () => {
     vi.mocked(global.fetch).mockResolvedValue({
       ok: true,
       json: async () => ({ id: '1', username: 'mimi' }),
     } as Response)
 
-    render(<SignupPage />)
+    render(<SigninPage />)
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'mimi' } })
-    fireEvent.change(screen.getByLabelText('4-digit PIN'), { target: { value: '1234' } })
-    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+    fireEvent.change(screen.getByLabelText('4-digit PIN'), { target: { value: '4821' } })
+    fireEvent.click(screen.getByRole('button', { name: /log in/i }))
 
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/login'))
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/play'))
   })
 
-  it('shows an error message when signup fails', async () => {
+  it('shows an error message when login fails', async () => {
     vi.mocked(global.fetch).mockResolvedValue({
       ok: false,
-      json: async () => ({ error: 'That username is taken' }),
+      json: async () => ({ error: 'Incorrect username or PIN' }),
     } as Response)
 
-    render(<SignupPage />)
+    render(<SigninPage />)
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'mimi' } })
-    fireEvent.change(screen.getByLabelText('4-digit PIN'), { target: { value: '1234' } })
-    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+    fireEvent.change(screen.getByLabelText('4-digit PIN'), { target: { value: '0000' } })
+    fireEvent.click(screen.getByRole('button', { name: /log in/i }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('That username is taken')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect username or PIN')
   })
 })
