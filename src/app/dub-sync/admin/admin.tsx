@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { YoutubePlayer, type YoutubePlayerHandle } from '@/components/dub-sync/youtube-player'
-import type { CantoWord, DubEpisode, DubSegment } from '@/lib/db/dub-sync'
+import type { DubEpisode, DubSegment } from '@/lib/db/dub-sync'
 import { englishTimeFor, type EpisodeAnchors } from '@/lib/dub-sync/normalize'
 import { computeResyncTarget } from '@/lib/dub-sync/synced-playback'
 import { NewEpisodeForm } from './new-episode-form'
@@ -12,7 +12,6 @@ import { AnchorFields } from './anchor-fields'
 interface AdminProps {
   episodes: DubEpisode[]
   segmentsByEpisode: Record<string, DubSegment[]>
-  cantoWordsByEpisode: Record<string, CantoWord[]>
 }
 
 function hasAllAnchors(episode: DubEpisode): episode is DubEpisode & EpisodeAnchors {
@@ -24,23 +23,18 @@ function hasAllAnchors(episode: DubEpisode): episode is DubEpisode & EpisodeAnch
   )
 }
 
-export function Admin({
-  episodes: initialEpisodes,
-  segmentsByEpisode: initialSegments,
-  cantoWordsByEpisode: initialCantoWords,
-}: AdminProps) {
+export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSegments }: AdminProps) {
   const [episodes, setEpisodes] = useState(initialEpisodes)
   const [segmentsByEpisode, setSegmentsByEpisode] = useState(initialSegments)
-  const [cantoWordsByEpisode, setCantoWordsByEpisode] = useState(initialCantoWords)
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(initialEpisodes[0]?.id ?? null)
 
   const cantoPlayerRef = useRef<YoutubePlayerHandle>(null)
   const englishPlayerRef = useRef<YoutubePlayerHandle>(null)
-  // segmentsByEpisode only updates once a POST's response comes back, so pressing "Mark segment
-  // end" again before that response lands would otherwise compute the same start twice (rapid
-  // presses are exactly how this feature is meant to be used). This ref advances synchronously,
-  // before the request even goes out, so each press always sees the immediately preceding one's
-  // end regardless of network timing.
+  // segmentsByEpisode only updates once a POST's response comes back, so releasing space again
+  // before that response lands would otherwise compute the same start twice (rapid marking is
+  // exactly how this feature is meant to be used). This ref advances synchronously, before the
+  // request even goes out, so each press always sees the immediately preceding one's end
+  // regardless of network timing.
   const nextSegmentStartFloorRef = useRef<Record<string, number>>({})
   const pendingSegmentStartRef = useRef<number | null>(null)
 
@@ -53,7 +47,6 @@ export function Admin({
   function handleEpisodeCreated(newEpisode: DubEpisode) {
     setEpisodes((current) => [...current, newEpisode])
     setSegmentsByEpisode((current) => ({ ...current, [newEpisode.id]: [] }))
-    setCantoWordsByEpisode((current) => ({ ...current, [newEpisode.id]: [] }))
     setSelectedEpisodeId(newEpisode.id)
   }
 
@@ -179,27 +172,9 @@ export function Admin({
       ...current,
       [selectedEpisodeId]: current[selectedEpisodeId].filter((s) => s.id !== segmentId),
     }))
-    // Force the next markSegmentEnd call to recompute the floor from fresh segments state,
-    // rather than keep the deleted segment's end around.
+    // Force the next marked segment to recompute the floor from fresh segments state, rather
+    // than keep the deleted segment's end around.
     delete nextSegmentStartFloorRef.current[selectedEpisodeId]
-  }
-
-  const [transcribeState, setTranscribeState] = useState<{ working: boolean; error: string | null }>({
-    working: false,
-    error: null,
-  })
-
-  async function runTranscribeCanto() {
-    if (!episode) return
-    setTranscribeState({ working: true, error: null })
-    const response = await fetch(`/api/dub-sync/episodes/${episode.id}/transcribe-canto`, { method: 'POST' })
-    const body = await response.json()
-    if (!response.ok) {
-      setTranscribeState({ working: false, error: body.error ?? 'Failed to transcribe Cantonese audio' })
-      return
-    }
-    setCantoWordsByEpisode((current) => ({ ...current, [episode.id]: body.words }))
-    setTranscribeState({ working: false, error: null })
   }
 
   const [syncing, setSyncing] = useState(false)
@@ -252,13 +227,17 @@ export function Admin({
   useEffect(() => {
     if (!syncing || !episode || !anchorsSet) return
     const anchors = episode as DubEpisode & EpisodeAnchors
+    // Captured here, in the scope where `episode` is already narrowed non-null — TypeScript
+    // doesn't carry that narrowing into the nested function declarations below, since it can't
+    // prove they run synchronously with this check.
+    const episodeId = episode.id
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.code !== 'Space' || event.repeat) return
       event.preventDefault()
       const cantoTime = cantoPlayerRef.current?.getCurrentTime() ?? 0
       const floor =
-        nextSegmentStartFloorRef.current[episode.id] ??
+        nextSegmentStartFloorRef.current[episodeId] ??
         (segments.length > 0 ? segments[segments.length - 1].cantoEnd : anchors.cantoContentStart)
       pendingSegmentStartRef.current = Math.max(cantoTime - 0.5, floor)
     }
@@ -274,21 +253,21 @@ export function Admin({
 
       const englishStart = englishTimeFor(cantoStart, anchors)
       const englishEnd = englishTimeFor(cantoEnd, anchors)
-      nextSegmentStartFloorRef.current[episode.id] = cantoEnd
+      nextSegmentStartFloorRef.current[episodeId] = cantoEnd
 
-      const response = await fetch(`/api/dub-sync/episodes/${episode.id}/segments`, {
+      const response = await fetch(`/api/dub-sync/episodes/${episodeId}/segments`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ cantoStart, cantoEnd, englishStart, englishEnd }),
       })
       if (!response.ok) {
-        nextSegmentStartFloorRef.current[episode.id] = cantoStart
+        nextSegmentStartFloorRef.current[episodeId] = cantoStart
         return
       }
       const { segment } = await response.json()
       setSegmentsByEpisode((current) => ({
         ...current,
-        [episode.id]: [...(current[episode.id] ?? []), segment],
+        [episodeId]: [...(current[episodeId] ?? []), segment],
       }))
     }
 
@@ -381,9 +360,6 @@ export function Admin({
             {!anchorsSet && <p className="text-gray-500 mb-4">Set anchors before marking segments.</p>}
 
             <div className="flex gap-2 mb-4">
-              <button onClick={runTranscribeCanto} disabled={transcribeState.working} className="border p-2 rounded">
-                {transcribeState.working ? 'Transcribing…' : 'Transcribe Cantonese'}
-              </button>
               <button onClick={runGenerateFromCaptions} disabled={!anchorsSet} className="border p-2 rounded">
                 Generate from captions
               </button>
@@ -406,11 +382,6 @@ export function Admin({
               <p className="text-gray-500 mb-4">Hold SPACE while a character is speaking, release when they stop.</p>
             )}
 
-            {transcribeState.error && (
-              <p role="alert" className="text-red-600 mb-4">
-                {transcribeState.error}
-              </p>
-            )}
             {captionsError && (
               <p role="alert" className="text-red-600 mb-4">
                 {captionsError}

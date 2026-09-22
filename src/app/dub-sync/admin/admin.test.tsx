@@ -61,13 +61,7 @@ describe('Admin', () => {
   })
 
   it('lists episodes and switches the selected panel without navigating', () => {
-    render(
-      <Admin
-        episodes={[episodeA, episodeB]}
-        segmentsByEpisode={{ 'ep-a': [], 'ep-b': [] }}
-        cantoWordsByEpisode={{ 'ep-a': [], 'ep-b': [] }}
-      />
-    )
+    render(<Admin episodes={[episodeA, episodeB]} segmentsByEpisode={{ 'ep-a': [], 'ep-b': [] }} />)
 
     expect(screen.getByRole('heading', { name: 'Muddy Puddles' })).toBeInTheDocument()
 
@@ -82,7 +76,7 @@ describe('Admin', () => {
       json: () => Promise.resolve({ episode: { ...episodeB, id: 'ep-c', title: 'New Episode' } }),
     } as Response)
 
-    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} cantoWordsByEpisode={{ 'ep-a': [] }} />)
+    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} />)
 
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'New Episode' } })
     fireEvent.change(screen.getByLabelText('Cantonese video ID'), { target: { value: 'c' } })
@@ -99,7 +93,7 @@ describe('Admin', () => {
       json: () => Promise.resolve({ episode: { ...episodeA, cantoContentStart: 8 } }),
     } as Response)
 
-    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} cantoWordsByEpisode={{ 'ep-a': [] }} />)
+    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} />)
     refs.assign(makeHandle(() => 8), makeHandle(() => 0))
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Mark content start' })[0])
@@ -111,13 +105,7 @@ describe('Admin', () => {
 
   it('shows the current anchor values in editable fields, defaulting to 0 when null', () => {
     const episodeWithSomeAnchors = { ...episodeA, cantoContentStart: 29.3, englishContentEnd: 300 }
-    render(
-      <Admin
-        episodes={[episodeWithSomeAnchors]}
-        segmentsByEpisode={{ 'ep-a': [] }}
-        cantoWordsByEpisode={{ 'ep-a': [] }}
-      />
-    )
+    render(<Admin episodes={[episodeWithSomeAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
 
     const startInputs = screen.getAllByLabelText('Start')
     const endInputs = screen.getAllByLabelText('End')
@@ -133,7 +121,7 @@ describe('Admin', () => {
       json: () => Promise.resolve({ episode: { ...episodeA, cantoContentStart: 25 } }),
     } as Response)
 
-    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} cantoWordsByEpisode={{ 'ep-a': [] }} />)
+    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} />)
 
     const cantoStartInput = screen.getAllByLabelText('Start')[0]
     fireEvent.change(cantoStartInput, { target: { value: '25' } })
@@ -156,7 +144,7 @@ describe('Admin', () => {
   })
 })
 
-describe('Admin transcribe canto and generate from captions', () => {
+describe('Admin generate from captions', () => {
   const episodeWithAnchors = {
     ...episodeA,
     cantoContentStart: 10,
@@ -170,59 +158,6 @@ describe('Admin transcribe canto and generate from captions', () => {
     vi.mocked(YoutubePlayer).mockImplementation(({ elementId }: { elementId: string }) => (
       <div data-testid={`player-${elementId}`} />
     ))
-  })
-
-  it('runs transcribe canto, shows a working state, and clears it on success', async () => {
-    let resolveFetch: (value: unknown) => void = () => {}
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockReturnValue(
-        new Promise((resolve) => {
-          resolveFetch = resolve
-        })
-      )
-    )
-
-    render(
-      <Admin
-        episodes={[episodeWithAnchors]}
-        segmentsByEpisode={{ 'ep-a': [] }}
-        cantoWordsByEpisode={{ 'ep-a': [] }}
-      />
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Transcribe Cantonese' }))
-
-    expect(screen.getByRole('button', { name: 'Transcribing…' })).toBeDisabled()
-
-    resolveFetch({
-      ok: true,
-      json: () =>
-        Promise.resolve({ words: [{ id: 'w-1', episodeId: 'ep-a', text: '你好', startTime: 1, endTime: 1.5 }] }),
-    })
-
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Transcribe Cantonese' })).toBeInTheDocument())
-    expect(fetch).toHaveBeenCalledWith(
-      '/api/dub-sync/episodes/ep-a/transcribe-canto',
-      expect.objectContaining({ method: 'POST' })
-    )
-  })
-
-  it('shows an error when transcription fails', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: false, json: () => Promise.resolve({ error: 'yt-dlp not found' }) })
-    )
-
-    render(
-      <Admin
-        episodes={[episodeWithAnchors]}
-        segmentsByEpisode={{ 'ep-a': [] }}
-        cantoWordsByEpisode={{ 'ep-a': [] }}
-      />
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Transcribe Cantonese' }))
-
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('yt-dlp not found'))
   })
 
   it('runs generate from captions and appends returned segments', async () => {
@@ -248,13 +183,7 @@ describe('Admin transcribe canto and generate from captions', () => {
       })
     )
 
-    render(
-      <Admin
-        episodes={[episodeWithAnchors]}
-        segmentsByEpisode={{ 'ep-a': [] }}
-        cantoWordsByEpisode={{ 'ep-a': [] }}
-      />
-    )
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
     fireEvent.click(screen.getByRole('button', { name: 'Generate from captions' }))
 
     await waitFor(() =>
@@ -289,13 +218,7 @@ describe('Admin synced playback', () => {
     const cantoHandle = makeHandle(() => 0)
     const englishHandle = makeHandle(() => 0)
 
-    render(
-      <Admin
-        episodes={[episodeWithAnchors]}
-        segmentsByEpisode={{ 'ep-a': [] }}
-        cantoWordsByEpisode={{ 'ep-a': [] }}
-      />
-    )
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
     refs.assign(cantoHandle, englishHandle)
 
     fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
@@ -310,13 +233,7 @@ describe('Admin synced playback', () => {
     const cantoHandle = makeHandle(() => 0)
     const englishHandle = makeHandle(() => 0)
 
-    render(
-      <Admin
-        episodes={[episodeWithAnchors]}
-        segmentsByEpisode={{ 'ep-a': [] }}
-        cantoWordsByEpisode={{ 'ep-a': [] }}
-      />
-    )
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
     refs.assign(cantoHandle, englishHandle)
 
     fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
@@ -332,13 +249,7 @@ describe('Admin synced playback', () => {
     const cantoHandle = makeHandle(() => 0)
     const englishHandle = makeHandle(() => 0)
 
-    render(
-      <Admin
-        episodes={[episodeWithAnchors]}
-        segmentsByEpisode={{ 'ep-a': [] }}
-        cantoWordsByEpisode={{ 'ep-a': [] }}
-      />
-    )
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
     refs.assign(cantoHandle, englishHandle)
 
     fireEvent.click(screen.getByRole('button', { name: 'Go to content start' }))
@@ -358,13 +269,7 @@ describe('Admin synced playback', () => {
     const cantoHandle = makeHandle(() => cantoTime)
     const englishHandle = makeHandle(() => englishTime)
 
-    render(
-      <Admin
-        episodes={[episodeWithAnchors]}
-        segmentsByEpisode={{ 'ep-a': [] }}
-        cantoWordsByEpisode={{ 'ep-a': [] }}
-      />
-    )
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
     refs.assign(cantoHandle, englishHandle)
 
     fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
@@ -406,13 +311,7 @@ describe('Admin play segment from the segment table', () => {
     const cantoHandle = makeHandle(() => 0)
     const englishHandle = makeHandle(() => 0)
 
-    render(
-      <Admin
-        episodes={[episodeWithAnchors]}
-        segmentsByEpisode={{ 'ep-a': [existingSegment] }}
-        cantoWordsByEpisode={{ 'ep-a': [] }}
-      />
-    )
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [existingSegment] }} />)
     refs.assign(cantoHandle, englishHandle)
 
     fireEvent.click(screen.getByRole('button', { name: 'Play' }))
@@ -461,13 +360,7 @@ describe('Admin spacebar marking', () => {
         }),
     } as Response)
 
-    render(
-      <Admin
-        episodes={[episodeWithAnchors]}
-        segmentsByEpisode={{ 'ep-a': [] }}
-        cantoWordsByEpisode={{ 'ep-a': [] }}
-      />
-    )
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
     refs.assign(cantoHandle, englishHandle)
     fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
 
@@ -516,7 +409,6 @@ describe('Admin spacebar marking', () => {
             { id: 'seg-1', episodeId: 'ep-a', position: 0, label: null, cantoStart: 15, cantoEnd: 35, englishStart: 30, englishEnd: 70 },
           ],
         }}
-        cantoWordsByEpisode={{ 'ep-a': [] }}
       />
     )
     refs.assign(cantoHandle, englishHandle)
@@ -545,13 +437,7 @@ describe('Admin spacebar marking', () => {
     const cantoHandle = makeHandle(() => cantoTime)
     const englishHandle = makeHandle(() => 0)
 
-    render(
-      <Admin
-        episodes={[episodeWithAnchors]}
-        segmentsByEpisode={{ 'ep-a': [] }}
-        cantoWordsByEpisode={{ 'ep-a': [] }}
-      />
-    )
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
     refs.assign(cantoHandle, englishHandle)
     fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
 
@@ -585,13 +471,7 @@ describe('Admin spacebar marking', () => {
         }),
     } as Response)
 
-    render(
-      <Admin
-        episodes={[episodeWithAnchors]}
-        segmentsByEpisode={{ 'ep-a': [] }}
-        cantoWordsByEpisode={{ 'ep-a': [] }}
-      />
-    )
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
     refs.assign(cantoHandle, englishHandle)
     fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
 
@@ -617,15 +497,8 @@ describe('Admin spacebar marking', () => {
     const cantoHandle = makeHandle(() => 20)
     const englishHandle = makeHandle(() => 0)
 
-    render(
-      <Admin
-        episodes={[episodeWithAnchors]}
-        segmentsByEpisode={{ 'ep-a': [] }}
-        cantoWordsByEpisode={{ 'ep-a': [] }}
-      />
-    )
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
     refs.assign(cantoHandle, englishHandle)
-    // deliberately do not click "Play synced"
 
     fireEvent.keyDown(window, { code: 'Space' })
     fireEvent.keyUp(window, { code: 'Space' })
