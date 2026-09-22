@@ -40,6 +40,12 @@ export function Admin({
 
   const cantoPlayerRef = useRef<YoutubePlayerHandle>(null)
   const englishPlayerRef = useRef<YoutubePlayerHandle>(null)
+  // segmentsByEpisode only updates once a POST's response comes back, so pressing "Mark segment
+  // end" again before that response lands would otherwise compute the same start twice (rapid
+  // presses are exactly how this feature is meant to be used). This ref advances synchronously,
+  // before the request even goes out, so each press always sees the immediately preceding one's
+  // end regardless of network timing.
+  const nextSegmentStartFloorRef = useRef<Record<string, number>>({})
 
   const episode = episodes.find((candidate) => candidate.id === selectedEpisodeId) ?? null
   const segments = selectedEpisodeId ? (segmentsByEpisode[selectedEpisodeId] ?? []) : []
@@ -134,6 +140,9 @@ export function Admin({
       ...current,
       [selectedEpisodeId]: current[selectedEpisodeId].filter((s) => s.id !== segmentId),
     }))
+    // Force the next markSegmentEnd call to recompute the floor from fresh segments state,
+    // rather than keep the deleted segment's end around.
+    delete nextSegmentStartFloorRef.current[selectedEpisodeId]
   }
 
   const [transcribeState, setTranscribeState] = useState<{ working: boolean; error: string | null }>({
@@ -187,23 +196,32 @@ export function Admin({
     const cantoEnd = cantoPlayerRef.current?.getCurrentTime() ?? 0
     const englishEnd = englishTimeFor(cantoEnd, anchors)
 
-    const previousEnd = segments.length > 0 ? segments[segments.length - 1].cantoEnd : anchors.cantoContentStart
+    const previousEnd =
+      nextSegmentStartFloorRef.current[episode.id] ??
+      (segments.length > 0 ? segments[segments.length - 1].cantoEnd : anchors.cantoContentStart)
     const nextWordStart = findNextWordStart(cantoWords, previousEnd, anchors.cantoContentEnd)
     const cantoStart = nextWordStart ?? previousEnd
     const englishStart = englishTimeFor(cantoStart, anchors)
+
+    // Advance the floor synchronously, before the request even goes out, so a rapid next press
+    // can't compute the same start from stale segments state.
+    nextSegmentStartFloorRef.current[episode.id] = cantoEnd
 
     const response = await fetch(`/api/dub-sync/episodes/${episode.id}/segments`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ cantoStart, cantoEnd, englishStart, englishEnd }),
     })
-    if (response.ok) {
-      const { segment } = await response.json()
-      setSegmentsByEpisode((current) => ({
-        ...current,
-        [episode.id]: [...(current[episode.id] ?? []), segment],
-      }))
+    if (!response.ok) {
+      // Roll back the optimistic advance so a retry starts from the same point.
+      nextSegmentStartFloorRef.current[episode.id] = previousEnd
+      return
     }
+    const { segment } = await response.json()
+    setSegmentsByEpisode((current) => ({
+      ...current,
+      [episode.id]: [...(current[episode.id] ?? []), segment],
+    }))
   }
 
   const [captionsError, setCaptionsError] = useState<string | null>(null)

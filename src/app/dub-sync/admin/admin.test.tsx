@@ -421,4 +421,38 @@ describe('Admin mark segment end', () => {
       )
     )
   })
+
+  it('does not reuse the same start for two rapid presses before the first request resolves', () => {
+    // segmentsByEpisode only updates once a response comes back, so without a synchronous floor,
+    // both presses would read the same (still-empty) segments state and compute the same start.
+    const refs = captureRefs()
+    let cantoTime = 20
+    const cantoHandle = makeHandle(() => cantoTime)
+    const englishHandle = makeHandle(() => 0)
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockReturnValue(new Promise(() => {})) // never resolves during this test
+    )
+
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{ 'ep-a': [] }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
+    refs.assign(cantoHandle, englishHandle)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark segment end' }))
+    cantoTime = 40
+    fireEvent.click(screen.getByRole('button', { name: 'Mark segment end' }))
+
+    expect(fetch).toHaveBeenCalledTimes(2)
+    const firstBody = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string)
+    const secondBody = JSON.parse((vi.mocked(fetch).mock.calls[1][1] as RequestInit).body as string)
+
+    expect(firstBody).toEqual({ cantoStart: 10, cantoEnd: 20, englishStart: 20, englishEnd: 40 })
+    expect(secondBody).toEqual({ cantoStart: 20, cantoEnd: 40, englishStart: 40, englishEnd: 80 })
+  })
 })
