@@ -63,11 +63,11 @@ describe('Admin', () => {
   it('lists episodes and switches the selected panel without navigating', () => {
     render(<Admin episodes={[episodeA, episodeB]} segmentsByEpisode={{ 'ep-a': [], 'ep-b': [] }} />)
 
-    expect(screen.getByRole('heading', { name: 'Muddy Puddles' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Episode title')).toHaveValue('Muddy Puddles')
 
     fireEvent.click(screen.getByRole('button', { name: 'The Playgroup' }))
 
-    expect(screen.getByRole('heading', { name: 'The Playgroup' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Episode title')).toHaveValue('The Playgroup')
   })
 
   it('selects a newly created episode', async () => {
@@ -83,7 +83,28 @@ describe('Admin', () => {
     fireEvent.change(screen.getByLabelText('English video ID'), { target: { value: 'd' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add episode' }))
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'New Episode' })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByLabelText('Episode title')).toHaveValue('New Episode'))
+  })
+
+  it('renames an episode on blur and reflects it in the episode list', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ episode: { ...episodeA, title: 'Renamed Episode' } }),
+    } as Response)
+
+    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} />)
+
+    const titleInput = screen.getByLabelText('Episode title')
+    fireEvent.change(titleInput, { target: { value: 'Renamed Episode' } })
+    fireEvent.blur(titleInput)
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a',
+        expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ title: 'Renamed Episode' }) })
+      )
+    )
+    expect(screen.getByRole('button', { name: 'Renamed Episode' })).toBeInTheDocument()
   })
 
   it('marks the canto content start from the canto player and saves it', async () => {

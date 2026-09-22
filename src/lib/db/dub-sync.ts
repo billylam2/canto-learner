@@ -96,6 +96,19 @@ export async function updateEpisodeAnchors(
   return toDubEpisode(data as DubEpisodeRow)
 }
 
+export async function updateEpisodeTitle(
+  supabase: SupabaseClient,
+  episodeId: string,
+  title: string
+): Promise<DubEpisode> {
+  const { data, error } = await supabase.from('dub_episodes').update({ title }).eq('id', episodeId).select('*').single()
+
+  if (error || !data) {
+    throw new Error(`Failed to update title for episode ${episodeId}: ${error?.message ?? 'unknown error'}`)
+  }
+  return toDubEpisode(data as DubEpisodeRow)
+}
+
 export interface DubSegment {
   id: string
   episodeId: string

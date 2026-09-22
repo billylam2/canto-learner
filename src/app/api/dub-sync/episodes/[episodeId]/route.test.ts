@@ -8,10 +8,11 @@ vi.mock('@/lib/supabase/client', () => ({
 
 vi.mock('@/lib/db/dub-sync', () => ({
   updateEpisodeAnchors: vi.fn(),
+  updateEpisodeTitle: vi.fn(),
 }))
 
 import { PATCH } from './route'
-import { updateEpisodeAnchors } from '@/lib/db/dub-sync'
+import { updateEpisodeAnchors, updateEpisodeTitle } from '@/lib/db/dub-sync'
 
 async function adminCookieHeader(): Promise<string> {
   process.env.SESSION_SECRET = 'a'.repeat(32)
@@ -61,6 +62,29 @@ describe('PATCH /api/dub-sync/episodes/[episodeId]', () => {
       params: Promise.resolve({ episodeId: 'ep-1' }),
     })
     expect(response.status).toBe(400)
+  })
+
+  it('updates the episode title instead of anchors when title is given', async () => {
+    vi.mocked(updateEpisodeTitle).mockResolvedValue({
+      id: 'ep-1',
+      title: 'New Title',
+      cantoneseVideoId: 'canto-123',
+      englishVideoId: 'eng-456',
+      cantoContentStart: null,
+      cantoContentEnd: null,
+      englishContentStart: null,
+      englishContentEnd: null,
+    })
+
+    const response = await PATCH(await makeRequest({ title: 'New Title' }), {
+      params: Promise.resolve({ episodeId: 'ep-1' }),
+    })
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.episode.title).toBe('New Title')
+    expect(updateEpisodeTitle).toHaveBeenCalledWith(expect.anything(), 'ep-1', 'New Title')
+    expect(updateEpisodeAnchors).not.toHaveBeenCalled()
   })
 
   it('rejects an unauthenticated request', async () => {

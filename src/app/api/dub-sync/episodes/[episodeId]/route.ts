@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/client'
-import { updateEpisodeAnchors } from '@/lib/db/dub-sync'
+import { updateEpisodeAnchors, updateEpisodeTitle } from '@/lib/db/dub-sync'
 import { readAdminSession } from '@/lib/auth/admin-session'
 
 export async function PATCH(
@@ -14,6 +14,13 @@ export async function PATCH(
 
   const { episodeId } = await params
   const body = await request.json().catch(() => null)
+
+  if (typeof body?.title === 'string') {
+    const supabase = createSupabaseServerClient()
+    const episode = await updateEpisodeTitle(supabase, episodeId, body.title)
+    return NextResponse.json({ episode })
+  }
+
   const cantoContentStart = typeof body?.cantoContentStart === 'number' ? body.cantoContentStart : null
   const cantoContentEnd = typeof body?.cantoContentEnd === 'number' ? body.cantoContentEnd : null
   const englishContentStart = typeof body?.englishContentStart === 'number' ? body.englishContentStart : null

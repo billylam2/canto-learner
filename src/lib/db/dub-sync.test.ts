@@ -5,6 +5,7 @@ import {
   listEpisodes,
   getEpisode,
   updateEpisodeAnchors,
+  updateEpisodeTitle,
   createSegment,
   createSegmentsBulk,
   listSegments,
@@ -153,6 +154,23 @@ describe('updateEpisodeAnchors', () => {
         englishContentEnd: 220,
       })
     ).rejects.toThrow('Failed to update anchors for episode ep-1: boom')
+  })
+})
+
+describe('updateEpisodeTitle', () => {
+  it('returns the updated episode', async () => {
+    const supabase = makeSingleMock({
+      single: { data: { ...episodeRow, title: 'New Title' }, error: null },
+    })
+    const result = await updateEpisodeTitle(supabase, 'ep-1', 'New Title')
+    expect(result.title).toBe('New Title')
+  })
+
+  it('throws when the update fails', async () => {
+    const supabase = makeSingleMock({ single: { data: null, error: { message: 'boom' } } })
+    await expect(updateEpisodeTitle(supabase, 'ep-1', 'New Title')).rejects.toThrow(
+      'Failed to update title for episode ep-1: boom'
+    )
   })
 })
 

@@ -54,6 +54,28 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
     setEpisodes((current) => current.map((candidate) => (candidate.id === updated.id ? updated : candidate)))
   }
 
+  // Resets the draft whenever the selected episode's title changes — either from switching
+  // episodes or from a successful rename elsewhere. See anchor-fields.tsx for the same pattern.
+  const [titleDraft, setTitleDraft] = useState(episode?.title ?? '')
+  const [previousEpisodeTitle, setPreviousEpisodeTitle] = useState(episode?.title ?? '')
+  if ((episode?.title ?? '') !== previousEpisodeTitle) {
+    setPreviousEpisodeTitle(episode?.title ?? '')
+    setTitleDraft(episode?.title ?? '')
+  }
+
+  async function saveTitle() {
+    if (!episode || titleDraft === episode.title) return
+    const response = await fetch(`/api/dub-sync/episodes/${episode.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: titleDraft }),
+    })
+    if (response.ok) {
+      const { episode: updated } = await response.json()
+      updateEpisodeInPlace(updated)
+    }
+  }
+
   async function saveAnchors(next: {
     cantoContentStart: number
     cantoContentEnd: number
@@ -342,7 +364,13 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
           <p className="text-gray-500">No episode selected.</p>
         ) : (
           <>
-            <h1 className="text-2xl font-bold mb-4">{episode.title}</h1>
+            <input
+              aria-label="Episode title"
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={saveTitle}
+              className="text-2xl font-bold mb-4 border rounded p-1 w-full"
+            />
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <YoutubePlayer ref={cantoPlayerRef} videoId={episode.cantoneseVideoId} elementId="canto-player" />

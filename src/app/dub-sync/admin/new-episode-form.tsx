@@ -7,12 +7,47 @@ interface NewEpisodeFormProps {
   onCreated: (episode: DubEpisode) => void
 }
 
+function combineTitles(cantoTitle: string | null, englishTitle: string | null): string {
+  if (cantoTitle && englishTitle) return `${cantoTitle} / ${englishTitle}`
+  return cantoTitle ?? englishTitle ?? ''
+}
+
 export function NewEpisodeForm({ onCreated }: NewEpisodeFormProps) {
   const [title, setTitle] = useState('')
+  const [titleManuallyEdited, setTitleManuallyEdited] = useState(false)
   const [cantoneseVideoId, setCantoneseVideoId] = useState('')
   const [englishVideoId, setEnglishVideoId] = useState('')
+  const [cantoTitle, setCantoTitle] = useState<string | null>(null)
+  const [englishTitle, setEnglishTitle] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  async function fetchAndApplyTitle(videoId: string, apply: (fetchedTitle: string) => void) {
+    if (!videoId) return
+    const response = await fetch(`/api/dub-sync/youtube-title?videoId=${encodeURIComponent(videoId)}`)
+    if (!response.ok) return
+    const { title: fetchedTitle } = await response.json()
+    apply(fetchedTitle)
+  }
+
+  function handleTitleChange(value: string) {
+    setTitle(value)
+    setTitleManuallyEdited(true)
+  }
+
+  async function handleCantoneseVideoIdBlur() {
+    await fetchAndApplyTitle(cantoneseVideoId, (fetchedTitle) => {
+      setCantoTitle(fetchedTitle)
+      if (!titleManuallyEdited) setTitle(combineTitles(fetchedTitle, englishTitle))
+    })
+  }
+
+  async function handleEnglishVideoIdBlur() {
+    await fetchAndApplyTitle(englishVideoId, (fetchedTitle) => {
+      setEnglishTitle(fetchedTitle)
+      if (!titleManuallyEdited) setTitle(combineTitles(cantoTitle, fetchedTitle))
+    })
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -32,8 +67,11 @@ export function NewEpisodeForm({ onCreated }: NewEpisodeFormProps) {
     }
     const { episode } = await response.json()
     setTitle('')
+    setTitleManuallyEdited(false)
     setCantoneseVideoId('')
     setEnglishVideoId('')
+    setCantoTitle(null)
+    setEnglishTitle(null)
     onCreated(episode)
   }
 
@@ -41,13 +79,19 @@ export function NewEpisodeForm({ onCreated }: NewEpisodeFormProps) {
     <form onSubmit={handleSubmit} className="flex flex-col gap-2 max-w-md" data-testid="new-episode-form">
       <label className="flex flex-col gap-1">
         Title
-        <input value={title} onChange={(e) => setTitle(e.target.value)} required className="border p-2 rounded" />
+        <input
+          value={title}
+          onChange={(e) => handleTitleChange(e.target.value)}
+          required
+          className="border p-2 rounded"
+        />
       </label>
       <label className="flex flex-col gap-1">
         Cantonese video ID
         <input
           value={cantoneseVideoId}
           onChange={(e) => setCantoneseVideoId(e.target.value)}
+          onBlur={handleCantoneseVideoIdBlur}
           required
           className="border p-2 rounded"
         />
@@ -57,6 +101,7 @@ export function NewEpisodeForm({ onCreated }: NewEpisodeFormProps) {
         <input
           value={englishVideoId}
           onChange={(e) => setEnglishVideoId(e.target.value)}
+          onBlur={handleEnglishVideoIdBlur}
           required
           className="border p-2 rounded"
         />
