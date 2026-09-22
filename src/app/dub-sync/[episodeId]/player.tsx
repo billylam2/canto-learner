@@ -1,17 +1,21 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { YoutubePlayer, type YoutubePlayerHandle } from '@/components/dub-sync/youtube-player'
 import { SegmentPlaybackController } from '@/lib/dub-sync/player-controller'
 import { findLastPlayedSegment } from '@/lib/dub-sync/find-last-played-segment'
 import type { DubEpisode, DubSegment } from '@/lib/db/dub-sync'
+import { EpisodeSidebar } from './episode-sidebar'
 
 interface PlayerProps {
   episode: DubEpisode
   segments: DubSegment[]
+  episodes: DubEpisode[]
 }
 
-export function Player({ episode, segments }: PlayerProps) {
+export function Player({ episode, segments, episodes }: PlayerProps) {
+  const router = useRouter()
   const cantoPlayerRef = useRef<YoutubePlayerHandle>(null)
   const englishPlayerRef = useRef<YoutubePlayerHandle>(null)
   const [playerError, setPlayerError] = useState<string | null>(null)
@@ -75,6 +79,14 @@ export function Player({ episode, segments }: PlayerProps) {
     })
   }
 
+  // Auto-advances the playlist once the Cantonese video reaches its natural end (the real end
+  // of the video, not any marked content boundary). Does nothing on the last episode.
+  function goToNextEpisode() {
+    const currentIndex = episodes.findIndex((candidate) => candidate.id === episode.id)
+    const nextEpisode = currentIndex === -1 ? undefined : episodes[currentIndex + 1]
+    if (nextEpisode) router.push(`/dub-sync/${nextEpisode.id}`)
+  }
+
   function toggleAlternating() {
     if (alternating) {
       controllerRef.current?.stop()
@@ -88,7 +100,8 @@ export function Player({ episode, segments }: PlayerProps) {
   }
 
   return (
-    <main className="max-w-3xl mx-auto p-6">
+    <main className="flex gap-6 p-6">
+      <div className="flex-1 max-w-3xl">
       <h1 className="text-2xl font-bold mb-4">{episode.title}</h1>
 
       {/* Wraps the videos AND the controls together so fullscreen (via our own button below,
@@ -106,6 +119,7 @@ export function Player({ episode, segments }: PlayerProps) {
             videoId={episode.cantoneseVideoId}
             elementId="canto-player"
             onError={() => setPlayerError('This video is unavailable.')}
+            onEnded={goToNextEpisode}
           />
         </div>
         <div data-testid="english-video-wrapper" className={videoWrapperClassName(visibleLanguage === 'english')}>
@@ -145,6 +159,9 @@ export function Player({ episode, segments }: PlayerProps) {
           </div>
         )}
       </div>
+      </div>
+
+      <EpisodeSidebar episodes={episodes} currentEpisodeId={episode.id} />
     </main>
   )
 }

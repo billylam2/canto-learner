@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase/client'
-import { getEpisode, listSegments } from '@/lib/db/dub-sync'
+import { getEpisode, listEpisodes, listSegments } from '@/lib/db/dub-sync'
 import { Player } from './player'
 
 export default async function DubSyncEpisodePage({ params }: { params: Promise<{ episodeId: string }> }) {
@@ -12,6 +12,8 @@ export default async function DubSyncEpisodePage({ params }: { params: Promise<{
     notFound()
   }
 
-  const segments = await listSegments(supabase, episodeId)
-  return <Player episode={episode} segments={segments} />
+  const [segments, episodes] = await Promise.all([listSegments(supabase, episodeId), listEpisodes(supabase)])
+  // Remounts Player fresh on every episode switch (sidebar click or auto-advance) rather than
+  // carry over stale state — fullscreen, alternating mode, etc. — from the previous episode.
+  return <Player key={episode.id} episode={episode} segments={segments} episodes={episodes} />
 }

@@ -1,6 +1,11 @@
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
+const pushMock = vi.fn()
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: pushMock }),
+}))
+
 vi.mock('@/components/dub-sync/youtube-player', () => ({
   YoutubePlayer: vi.fn(({ elementId }: { elementId: string }) => <div data-testid={`player-${elementId}`} />),
 }))
@@ -62,6 +67,8 @@ const segments = [
   },
 ]
 
+const episodes = [episode]
+
 function getController() {
   return vi.mocked(SegmentPlaybackController).mock.results[0].value
 }
@@ -82,13 +89,13 @@ describe('Player', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('initially shows the Cantonese video with the English video visually hidden', () => {
-    render(<Player episode={episode} segments={segments} />)
+    render(<Player episode={episode} segments={segments} episodes={episodes} />)
     expect(screen.getByTestId('canto-video-wrapper')).not.toHaveClass('sr-only')
     expect(screen.getByTestId('english-video-wrapper')).toHaveClass('sr-only')
   })
 
   it('shows an inline message when a player reports an error', () => {
-    render(<Player episode={episode} segments={segments} />)
+    render(<Player episode={episode} segments={segments} episodes={episodes} />)
     const cantoPlayerCall = vi.mocked(YoutubePlayer).mock.calls.find((call) => call[0].elementId === 'canto-player')
     act(() => {
       cantoPlayerCall?.[0].onError?.()
@@ -100,7 +107,7 @@ describe('Player', () => {
     it('pauses the Cantonese video and plays the English audio for the current line', () => {
       const cantoHandle = mockCantoPlayerHandle(12) // 50% through seg-1 (10-14)
 
-      render(<Player episode={episode} segments={segments} />)
+      render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Replay in English' }))
 
       expect(cantoHandle.pauseVideo).toHaveBeenCalled()
@@ -114,7 +121,7 @@ describe('Player', () => {
     it('resumes the Cantonese video once the English audio finishes', () => {
       const cantoHandle = mockCantoPlayerHandle(12)
 
-      render(<Player episode={episode} segments={segments} />)
+      render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Replay in English' }))
 
       // The mocked controller invokes the onDone callback synchronously.
@@ -138,7 +145,7 @@ describe('Player', () => {
         } as never
       })
 
-      render(<Player episode={episode} segments={segments} />)
+      render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Replay in English' }))
 
       expect(screen.getByTestId('canto-video-wrapper')).toHaveClass('sr-only')
@@ -154,7 +161,7 @@ describe('Player', () => {
     it('picks the previous line when the current one has barely started', () => {
       mockCantoPlayerHandle(41) // 25% through seg-2 (40-44); seg-1 already finished
 
-      render(<Player episode={episode} segments={segments} />)
+      render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Replay in English' }))
 
       expect(getController().playSegment).toHaveBeenCalledWith(
@@ -167,7 +174,7 @@ describe('Player', () => {
     it('shows a message instead of playing anything when no line has started yet', () => {
       const cantoHandle = mockCantoPlayerHandle(1)
 
-      render(<Player episode={episode} segments={segments} />)
+      render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Replay in English' }))
 
       // Nothing to replay, so playback is left alone rather than being paused for no reason.
@@ -181,7 +188,7 @@ describe('Player', () => {
     it('starts alternating playback from the current position and toggles to Stop alternating', () => {
       mockCantoPlayerHandle(7)
 
-      render(<Player episode={episode} segments={segments} />)
+      render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Play alternating' }))
 
       expect(getController().playEpisodeAlternating).toHaveBeenCalledWith(segments, 7)
@@ -191,7 +198,7 @@ describe('Player', () => {
     it('stops the controller and toggles back when clicked again', () => {
       mockCantoPlayerHandle(7)
 
-      render(<Player episode={episode} segments={segments} />)
+      render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Play alternating' }))
       fireEvent.click(screen.getByRole('button', { name: 'Stop alternating' }))
 
@@ -202,7 +209,7 @@ describe('Player', () => {
     it('disables Replay in English while alternating playback is running', () => {
       mockCantoPlayerHandle(7)
 
-      render(<Player episode={episode} segments={segments} />)
+      render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Play alternating' }))
 
       expect(screen.getByRole('button', { name: 'Replay in English' })).toBeDisabled()
@@ -240,7 +247,7 @@ describe('Player', () => {
     }
 
     it('requests fullscreen on the shared video+controls container and hides all controls', async () => {
-      render(<Player episode={episode} segments={segments} />)
+      render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Fullscreen' }))
 
       expect(Element.prototype.requestFullscreen).toHaveBeenCalled()
@@ -251,7 +258,7 @@ describe('Player', () => {
     })
 
     it('restores the controls once the browser exits fullscreen', async () => {
-      render(<Player episode={episode} segments={segments} />)
+      render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Fullscreen' }))
       await waitFor(() => expect(screen.queryByRole('button', { name: 'Fullscreen' })).not.toBeInTheDocument())
 
@@ -260,6 +267,37 @@ describe('Player', () => {
       await waitFor(() => expect(screen.getByRole('button', { name: 'Fullscreen' })).toBeInTheDocument())
       expect(screen.getByRole('button', { name: 'Replay in English' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Play alternating' })).toBeInTheDocument()
+    })
+  })
+
+  describe('Playlist sidebar and auto-advance', () => {
+    const nextEpisode = { ...episode, id: 'ep-2', title: 'Mr. Dinosaur Is Lost' }
+
+    function fireCantoEnded() {
+      const cantoPlayerCall = vi.mocked(YoutubePlayer).mock.calls.find((call) => call[0].elementId === 'canto-player')
+      act(() => cantoPlayerCall?.[0].onEnded?.())
+    }
+
+    it('lists every episode in the sidebar, linking to its player page', () => {
+      render(<Player episode={episode} segments={segments} episodes={[episode, nextEpisode]} />)
+
+      expect(screen.getByRole('link', { name: /Mr\. Dinosaur Is Lost/ })).toHaveAttribute('href', '/dub-sync/ep-2')
+    })
+
+    it('navigates to the next episode once the Cantonese video ends', () => {
+      render(<Player episode={episode} segments={segments} episodes={[episode, nextEpisode]} />)
+
+      fireCantoEnded()
+
+      expect(pushMock).toHaveBeenCalledWith('/dub-sync/ep-2')
+    })
+
+    it('does nothing when the current episode is the last one in the playlist', () => {
+      render(<Player episode={episode} segments={segments} episodes={[episode]} />)
+
+      fireCantoEnded()
+
+      expect(pushMock).not.toHaveBeenCalled()
     })
   })
 })

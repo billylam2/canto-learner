@@ -15,6 +15,7 @@ export interface YouTubePlayerOptions {
   events?: {
     onReady?: () => void
     onError?: () => void
+    onStateChange?: (event: { data: number }) => void
   }
 }
 

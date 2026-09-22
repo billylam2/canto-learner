@@ -84,6 +84,32 @@ describe('YoutubePlayer', () => {
     expect(ref.current?.getCurrentTime()).toBe(0)
   })
 
+  it('calls the onEnded prop when the underlying player reports the ENDED state', async () => {
+    const fakePlayer = makeFakePlayer()
+    const PlayerCtor = vi.fn(function PlayerCtor() { return fakePlayer })
+    vi.mocked(loadYoutubeIframeApi).mockResolvedValue({ Player: PlayerCtor as never })
+    const onEnded = vi.fn()
+
+    render(<YoutubePlayer videoId="video-1" elementId="canto-player" onEnded={onEnded} />)
+    await waitFor(() => expect(PlayerCtor).toHaveBeenCalled())
+
+    PlayerCtor.mock.calls[0][1].events.onStateChange({ data: 0 })
+    expect(onEnded).toHaveBeenCalled()
+  })
+
+  it('does not call onEnded for other player states', async () => {
+    const fakePlayer = makeFakePlayer()
+    const PlayerCtor = vi.fn(function PlayerCtor() { return fakePlayer })
+    vi.mocked(loadYoutubeIframeApi).mockResolvedValue({ Player: PlayerCtor as never })
+    const onEnded = vi.fn()
+
+    render(<YoutubePlayer videoId="video-1" elementId="canto-player" onEnded={onEnded} />)
+    await waitFor(() => expect(PlayerCtor).toHaveBeenCalled())
+
+    PlayerCtor.mock.calls[0][1].events.onStateChange({ data: 1 }) // playing
+    expect(onEnded).not.toHaveBeenCalled()
+  })
+
   it('calls the onError prop when the underlying player reports an error', async () => {
     const fakePlayer = makeFakePlayer()
     const PlayerCtor = vi.fn(function PlayerCtor() { return fakePlayer })

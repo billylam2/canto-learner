@@ -6,25 +6,32 @@ import type { YouTubePlayerLike } from '@/lib/dub-sync/player-controller'
 
 export interface YoutubePlayerHandle extends YouTubePlayerLike {}
 
+// YouTube IFrame API player state for "video finished playing" — see
+// https://developers.google.com/youtube/iframe_api_reference#Playback_status
+const YT_PLAYER_STATE_ENDED = 0
+
 interface YoutubePlayerProps {
   videoId: string
   elementId: string
   onError?: () => void
+  onEnded?: () => void
 }
 
 export const YoutubePlayer = forwardRef<YoutubePlayerHandle, YoutubePlayerProps>(function YoutubePlayer(
-  { videoId, elementId, onError },
+  { videoId, elementId, onError, onEnded },
   ref
 ) {
   const playerRef = useRef<YouTubePlayerLike | null>(null)
   const [ready, setReady] = useState(false)
 
-  // Callers commonly pass an inline arrow function for onError, which gets a new identity on
-  // every render. Reading it via a ref (rather than depending on it directly) keeps the effect
+  // Callers commonly pass inline arrow functions for these, which get a new identity on every
+  // render. Reading them via refs (rather than depending on them directly) keeps the effect
   // below from tearing down and reconstructing the real YT.Player — and resetting playback — on
   // every unrelated re-render of the caller.
   const onErrorRef = useRef(onError)
   onErrorRef.current = onError
+  const onEndedRef = useRef(onEnded)
+  onEndedRef.current = onEnded
 
   useEffect(() => {
     let cancelled = false
@@ -35,7 +42,13 @@ export const YoutubePlayer = forwardRef<YoutubePlayerHandle, YoutubePlayerProps>
         width: 960,
         height: 540,
         playerVars: { fs: 0 },
-        events: { onReady: () => setReady(true), onError: () => onErrorRef.current?.() },
+        events: {
+          onReady: () => setReady(true),
+          onError: () => onErrorRef.current?.(),
+          onStateChange: (event) => {
+            if (event.data === YT_PLAYER_STATE_ENDED) onEndedRef.current?.()
+          },
+        },
       })
     })
     return () => {
