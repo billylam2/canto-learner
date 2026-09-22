@@ -8,15 +8,12 @@ import { computeResyncTarget } from '@/lib/dub-sync/synced-playback'
 import { findNextWordStart } from '@/lib/dub-sync/next-word-start'
 import { NewEpisodeForm } from './new-episode-form'
 import { SegmentTable } from './segment-table'
+import { AnchorFields } from './anchor-fields'
 
 interface AdminProps {
   episodes: DubEpisode[]
   segmentsByEpisode: Record<string, DubSegment[]>
   cantoWordsByEpisode: Record<string, CantoWord[]>
-}
-
-function formatAnchor(value: number | null): string {
-  return value === null ? 'not set' : `${value.toFixed(2)}s`
 }
 
 function hasAllAnchors(episode: DubEpisode): episode is DubEpisode & EpisodeAnchors {
@@ -113,6 +110,46 @@ export function Admin({
     })
   }
 
+  function editCantoStart(value: number) {
+    if (!episode) return
+    saveAnchors({
+      cantoContentStart: value,
+      cantoContentEnd: episode.cantoContentEnd ?? value,
+      englishContentStart: episode.englishContentStart ?? 0,
+      englishContentEnd: episode.englishContentEnd ?? 0,
+    })
+  }
+
+  function editCantoEnd(value: number) {
+    if (!episode) return
+    saveAnchors({
+      cantoContentStart: episode.cantoContentStart ?? 0,
+      cantoContentEnd: value,
+      englishContentStart: episode.englishContentStart ?? 0,
+      englishContentEnd: episode.englishContentEnd ?? 0,
+    })
+  }
+
+  function editEnglishStart(value: number) {
+    if (!episode) return
+    saveAnchors({
+      cantoContentStart: episode.cantoContentStart ?? 0,
+      cantoContentEnd: episode.cantoContentEnd ?? 0,
+      englishContentStart: value,
+      englishContentEnd: episode.englishContentEnd ?? 0,
+    })
+  }
+
+  function editEnglishEnd(value: number) {
+    if (!episode) return
+    saveAnchors({
+      cantoContentStart: episode.cantoContentStart ?? 0,
+      cantoContentEnd: episode.cantoContentEnd ?? 0,
+      englishContentStart: episode.englishContentStart ?? 0,
+      englishContentEnd: value,
+    })
+  }
+
   function markEnglishEnd() {
     if (!episode) return
     const time = englishPlayerRef.current?.getCurrentTime() ?? 0
@@ -176,6 +213,21 @@ export function Admin({
     cantoPlayerRef.current?.pauseVideo()
     englishPlayerRef.current?.pauseVideo()
     setSyncing(false)
+  }
+
+  function goToContentStart() {
+    if (!episode || !anchorsSet) return
+    const anchors = episode as DubEpisode & EpisodeAnchors
+    cantoPlayerRef.current?.seekTo(anchors.cantoContentStart, true)
+    englishPlayerRef.current?.seekTo(anchors.englishContentStart, true)
+    startSyncedPlayback()
+  }
+
+  function playSegment(segment: DubSegment) {
+    if (!anchorsSet) return
+    cantoPlayerRef.current?.seekTo(segment.cantoStart, true)
+    englishPlayerRef.current?.seekTo(segment.englishStart, true)
+    startSyncedPlayback()
   }
 
   useEffect(() => {
@@ -277,9 +329,12 @@ export function Admin({
                     Mark content end
                   </button>
                 </div>
-                <p className="text-sm text-gray-500 mt-1">
-                  Start: {formatAnchor(episode.cantoContentStart)} · End: {formatAnchor(episode.cantoContentEnd)}
-                </p>
+                <AnchorFields
+                  start={episode.cantoContentStart}
+                  end={episode.cantoContentEnd}
+                  onSaveStart={editCantoStart}
+                  onSaveEnd={editCantoEnd}
+                />
               </div>
               <div>
                 <YoutubePlayer ref={englishPlayerRef} videoId={episode.englishVideoId} elementId="english-player" />
@@ -291,9 +346,12 @@ export function Admin({
                     Mark content end
                   </button>
                 </div>
-                <p className="text-sm text-gray-500 mt-1">
-                  Start: {formatAnchor(episode.englishContentStart)} · End: {formatAnchor(episode.englishContentEnd)}
-                </p>
+                <AnchorFields
+                  start={episode.englishContentStart}
+                  end={episode.englishContentEnd}
+                  onSaveStart={editEnglishStart}
+                  onSaveEnd={editEnglishEnd}
+                />
               </div>
             </div>
             {!anchorsSet && <p className="text-gray-500 mb-4">Set anchors before marking segments.</p>}
@@ -314,6 +372,9 @@ export function Admin({
                 className="border p-2 rounded"
               >
                 {syncing ? 'Pause synced' : 'Play synced'}
+              </button>
+              <button onClick={goToContentStart} disabled={!anchorsSet} className="border p-2 rounded">
+                Go to content start
               </button>
               <button onClick={markSegmentEnd} disabled={!anchorsSet} className="border p-2 rounded">
                 Mark segment end
@@ -336,6 +397,7 @@ export function Admin({
               segments={segments}
               onUpdate={handleSegmentUpdated}
               onDelete={handleSegmentDeleted}
+              onPlay={playSegment}
             />
           </>
         )}

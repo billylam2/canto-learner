@@ -8,9 +8,10 @@ export interface SegmentTableProps {
   segments: DubSegment[]
   onUpdate: (segment: DubSegment) => void
   onDelete: (segmentId: string) => void
+  onPlay: (segment: DubSegment) => void
 }
 
-export function SegmentTable({ episodeId, segments, onUpdate, onDelete }: SegmentTableProps) {
+export function SegmentTable({ episodeId, segments, onUpdate, onDelete, onPlay }: SegmentTableProps) {
   return (
     <table className="w-full text-sm">
       <thead>
@@ -31,6 +32,7 @@ export function SegmentTable({ episodeId, segments, onUpdate, onDelete }: Segmen
             segment={segment}
             onUpdate={onUpdate}
             onDelete={onDelete}
+            onPlay={onPlay}
           />
         ))}
       </tbody>
@@ -43,9 +45,10 @@ interface SegmentRowProps {
   segment: DubSegment
   onUpdate: (segment: DubSegment) => void
   onDelete: (segmentId: string) => void
+  onPlay: (segment: DubSegment) => void
 }
 
-function SegmentRow({ episodeId, segment, onUpdate, onDelete }: SegmentRowProps) {
+function SegmentRow({ episodeId, segment, onUpdate, onDelete, onPlay }: SegmentRowProps) {
   const [draft, setDraft] = useState(segment)
   const [saveError, setSaveError] = useState<string | null>(null)
   // Resets draft when the segment prop changes (e.g. a successful save on another field returns
@@ -128,6 +131,9 @@ function SegmentRow({ episodeId, segment, onUpdate, onDelete }: SegmentRowProps)
         />
       </td>
       <td>
+        <button onClick={() => onPlay(segment)} className="border p-1 rounded text-sm">
+          Play
+        </button>
         <button onClick={handleDelete} className="border p-1 rounded text-sm">
           Delete
         </button>

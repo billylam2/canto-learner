@@ -109,7 +109,7 @@ describe('Admin', () => {
     )
   })
 
-  it('shows the current anchor values, or "not set" when null', () => {
+  it('shows the current anchor values in editable fields, defaulting to 0 when null', () => {
     const episodeWithSomeAnchors = { ...episodeA, cantoContentStart: 29.3, englishContentEnd: 300 }
     render(
       <Admin
@@ -119,8 +119,40 @@ describe('Admin', () => {
       />
     )
 
-    expect(screen.getByText('Start: 29.30s · End: not set')).toBeInTheDocument()
-    expect(screen.getByText('Start: not set · End: 300.00s')).toBeInTheDocument()
+    const startInputs = screen.getAllByLabelText('Start')
+    const endInputs = screen.getAllByLabelText('End')
+    expect(startInputs[0]).toHaveValue(29.3) // canto
+    expect(endInputs[0]).toHaveValue(0) // canto, unset
+    expect(startInputs[1]).toHaveValue(0) // english, unset
+    expect(endInputs[1]).toHaveValue(300) // english
+  })
+
+  it('saves a typed anchor value on blur', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ episode: { ...episodeA, cantoContentStart: 25 } }),
+    } as Response)
+
+    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} cantoWordsByEpisode={{ 'ep-a': [] }} />)
+
+    const cantoStartInput = screen.getAllByLabelText('Start')[0]
+    fireEvent.change(cantoStartInput, { target: { value: '25' } })
+    fireEvent.blur(cantoStartInput)
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({
+            cantoContentStart: 25,
+            cantoContentEnd: 25,
+            englishContentStart: 0,
+            englishContentEnd: 0,
+          }),
+        })
+      )
+    )
   })
 })
 
@@ -295,6 +327,29 @@ describe('Admin synced playback', () => {
     expect(screen.getByRole('button', { name: 'Play synced' })).toBeInTheDocument()
   })
 
+  it('seeks both players to the content-start anchors and starts synced playback', () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 0)
+    const englishHandle = makeHandle(() => 0)
+
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{ 'ep-a': [] }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
+    refs.assign(cantoHandle, englishHandle)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Go to content start' }))
+
+    expect(cantoHandle.seekTo).toHaveBeenCalledWith(10, true)
+    expect(englishHandle.seekTo).toHaveBeenCalledWith(20, true)
+    expect(cantoHandle.playVideo).toHaveBeenCalled()
+    expect(englishHandle.playVideo).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Pause synced' })).toBeInTheDocument()
+  })
+
   it('re-seeks the english player only once drift exceeds the threshold', () => {
     vi.useFakeTimers()
     const refs = captureRefs()
@@ -454,5 +509,53 @@ describe('Admin mark segment end', () => {
 
     expect(firstBody).toEqual({ cantoStart: 10, cantoEnd: 20, englishStart: 20, englishEnd: 40 })
     expect(secondBody).toEqual({ cantoStart: 20, cantoEnd: 40, englishStart: 40, englishEnd: 80 })
+  })
+})
+
+describe('Admin play segment from the segment table', () => {
+  const episodeWithAnchors = {
+    ...episodeA,
+    cantoContentStart: 10,
+    cantoContentEnd: 110,
+    englishContentStart: 20,
+    englishContentEnd: 220,
+  }
+  const existingSegment = {
+    id: 'seg-1',
+    episodeId: 'ep-a',
+    position: 0,
+    label: null,
+    cantoStart: 15,
+    cantoEnd: 35,
+    englishStart: 30,
+    englishEnd: 70,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  it('seeks both players to the segment and starts synced playback when Play is clicked', () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 0)
+    const englishHandle = makeHandle(() => 0)
+
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{ 'ep-a': [existingSegment] }}
+        cantoWordsByEpisode={{ 'ep-a': [] }}
+      />
+    )
+    refs.assign(cantoHandle, englishHandle)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }))
+
+    expect(cantoHandle.seekTo).toHaveBeenCalledWith(15, true)
+    expect(englishHandle.seekTo).toHaveBeenCalledWith(30, true)
+    expect(cantoHandle.playVideo).toHaveBeenCalled()
+    expect(englishHandle.playVideo).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Pause synced' })).toBeInTheDocument()
   })
 })

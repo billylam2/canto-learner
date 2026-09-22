@@ -20,7 +20,7 @@ describe('SegmentTable', () => {
   })
 
   it('renders one row per segment with its current values', () => {
-    render(<SegmentTable episodeId="ep-1" segments={[segment]} onUpdate={vi.fn()} onDelete={vi.fn()} />)
+    render(<SegmentTable episodeId="ep-1" segments={[segment]} onUpdate={vi.fn()} onDelete={vi.fn()} onPlay={vi.fn()} />)
     expect(screen.getByDisplayValue('Hello')).toBeInTheDocument()
     expect(screen.getByDisplayValue('10')).toBeInTheDocument()
     expect(screen.getByDisplayValue('14')).toBeInTheDocument()
@@ -32,7 +32,7 @@ describe('SegmentTable', () => {
       json: () => Promise.resolve({ segment: { ...segment, cantoEnd: 16 } }),
     } as Response)
     const onUpdate = vi.fn()
-    render(<SegmentTable episodeId="ep-1" segments={[segment]} onUpdate={onUpdate} onDelete={vi.fn()} />)
+    render(<SegmentTable episodeId="ep-1" segments={[segment]} onUpdate={onUpdate} onDelete={vi.fn()} onPlay={vi.fn()} />)
 
     const cantoEndInput = screen.getByDisplayValue('14')
     fireEvent.change(cantoEndInput, { target: { value: '16' } })
@@ -48,7 +48,7 @@ describe('SegmentTable', () => {
   })
 
   it('does not save when a field is blurred unchanged', async () => {
-    render(<SegmentTable episodeId="ep-1" segments={[segment]} onUpdate={vi.fn()} onDelete={vi.fn()} />)
+    render(<SegmentTable episodeId="ep-1" segments={[segment]} onUpdate={vi.fn()} onDelete={vi.fn()} onPlay={vi.fn()} />)
     const cantoEndInput = screen.getByDisplayValue('14')
     fireEvent.blur(cantoEndInput)
     expect(fetch).not.toHaveBeenCalled()
@@ -57,7 +57,7 @@ describe('SegmentTable', () => {
   it('shows an inline error and keeps the typed value when a save fails', async () => {
     vi.mocked(fetch).mockResolvedValue({ ok: false } as Response)
     const onUpdate = vi.fn()
-    render(<SegmentTable episodeId="ep-1" segments={[segment]} onUpdate={onUpdate} onDelete={vi.fn()} />)
+    render(<SegmentTable episodeId="ep-1" segments={[segment]} onUpdate={onUpdate} onDelete={vi.fn()} onPlay={vi.fn()} />)
 
     const cantoEndInput = screen.getByDisplayValue('14')
     fireEvent.change(cantoEndInput, { target: { value: '16' } })
@@ -71,7 +71,7 @@ describe('SegmentTable', () => {
   it('deletes a segment', async () => {
     vi.mocked(fetch).mockResolvedValue({ ok: true, json: () => Promise.resolve({ ok: true }) } as Response)
     const onDelete = vi.fn()
-    render(<SegmentTable episodeId="ep-1" segments={[segment]} onUpdate={vi.fn()} onDelete={onDelete} />)
+    render(<SegmentTable episodeId="ep-1" segments={[segment]} onUpdate={vi.fn()} onDelete={onDelete} onPlay={vi.fn()} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
@@ -82,5 +82,14 @@ describe('SegmentTable', () => {
       )
     )
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith('seg-1'))
+  })
+
+  it('calls onPlay with the segment when Play is clicked', () => {
+    const onPlay = vi.fn()
+    render(<SegmentTable episodeId="ep-1" segments={[segment]} onUpdate={vi.fn()} onDelete={vi.fn()} onPlay={onPlay} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }))
+
+    expect(onPlay).toHaveBeenCalledWith(segment)
   })
 })
