@@ -39,9 +39,8 @@ Recorded audio files in `content/audio/` are treated as real content and should 
 
 ## Dub Sync admin tool
 
-A separate, password-gated personal tool at `/dub-sync/admin` for building the Cantonese/English clip-pairing data used by `/dub-sync`. Requires two things beyond the main app's setup:
+A separate, password-gated personal tool at `/dub-sync/admin` for building the Cantonese/English clip-pairing data used by `/dub-sync`. Requires one thing beyond the main app's setup:
 
 - **`DUB_SYNC_ADMIN_PASSWORD`** in `.env.local` — the single shared password for `/dub-sync/admin`, `/dub-sync/login`, and the episode/segment-editing API routes. The player at `/dub-sync/<episodeId>` itself stays open, unauthenticated.
-- **[`yt-dlp`](https://github.com/yt-dlp/yt-dlp)** installed and on `PATH` wherever `npm run dev` (or however the app is served) runs — required by the "Transcribe Cantonese" button, which downloads the Cantonese video's audio temporarily (never kept or served) to transcribe it via Google Cloud Speech-to-Text (word timestamps only — speaker diarization was tried and dropped; Google doesn't support it for Cantonese at all, and it proved unreliable for English too). Also requires the Speech-to-Text API enabled on the same `GOOGLE_CLOUD_PROJECT` already used for text-to-speech.
-- **`DUB_SYNC_GCS_BUCKET`** in `.env.local` — the name of a Google Cloud Storage bucket (e.g. created via `gsutil mb gs://<bucket-name>` or the console) that the transcription pipeline can read and write. Speech-to-Text requires audio longer than its inline-request limit to be passed as a `gs://` URI rather than embedded directly, so the downloaded audio is uploaded there temporarily and deleted again once transcription finishes — never kept or served.
+- Segments are marked by hand: set each video's content-start/content-end anchors, then use "Play synced" and hold SPACE while a character is speaking (release when they stop) to mark a segment. No audio download or transcription is involved.
 - Apply `supabase/migrations/0006_create_dub_canto_words.sql` — adds the table that stores each episode's transcribed Cantonese word timestamps (used by the "Transcribe Cantonese" button to infer segment start times).
