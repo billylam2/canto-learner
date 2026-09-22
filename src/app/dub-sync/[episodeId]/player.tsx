@@ -16,13 +16,14 @@ export function Player({ episode, segments }: PlayerProps) {
   const englishPlayerRef = useRef<YoutubePlayerHandle>(null)
   const [playerError, setPlayerError] = useState<string | null>(null)
   const [replayMessage, setReplayMessage] = useState<string | null>(null)
+  const [visibleLanguage, setVisibleLanguage] = useState<'canto' | 'english'>('canto')
 
   const controllerRef = useRef<SegmentPlaybackController | null>(null)
 
   useEffect(() => {
     controllerRef.current = new SegmentPlaybackController(
       (lang) => (lang === 'canto' ? cantoPlayerRef.current! : englishPlayerRef.current!),
-      () => {}
+      setVisibleLanguage
     )
   }, [])
 
@@ -36,21 +37,20 @@ export function Player({ episode, segments }: PlayerProps) {
 
     setReplayMessage(null)
     cantoPlayerRef.current?.pauseVideo()
-    controllerRef.current?.playSegment(
-      'english',
-      { start: segment.englishStart, end: segment.englishEnd },
-      () => cantoPlayerRef.current?.playVideo()
-    )
+    controllerRef.current?.playSegment('english', { start: segment.englishStart, end: segment.englishEnd }, () => {
+      setVisibleLanguage('canto')
+      cantoPlayerRef.current?.playVideo()
+    })
   }
 
   return (
     <main className="max-w-3xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">{episode.title}</h1>
 
-      {/* The Cantonese video is always the one shown. The English video stays mounted (so its
-          audio can play) but is always visually hidden — the picture on screen never cuts away,
-          even while English audio plays over the frozen Cantonese frame. */}
-      <div data-testid="canto-video-wrapper">
+      {/* Both videos stay mounted at all times (so either one's audio can play regardless of which
+          is shown), but only one is ever visible at once — the Cantonese video normally, swapping
+          to the English video for the duration of a "Replay in English" playback. */}
+      <div data-testid="canto-video-wrapper" className={visibleLanguage === 'canto' ? undefined : 'sr-only'}>
         <YoutubePlayer
           ref={cantoPlayerRef}
           videoId={episode.cantoneseVideoId}
@@ -58,7 +58,7 @@ export function Player({ episode, segments }: PlayerProps) {
           onError={() => setPlayerError('This video is unavailable.')}
         />
       </div>
-      <div data-testid="english-video-wrapper" className="sr-only">
+      <div data-testid="english-video-wrapper" className={visibleLanguage === 'english' ? undefined : 'sr-only'}>
         <YoutubePlayer
           ref={englishPlayerRef}
           videoId={episode.englishVideoId}

@@ -80,7 +80,7 @@ function mockCantoPlayerHandle(currentTime: number) {
 describe('Player', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('the Cantonese video is always visible and the English video is always visually hidden', () => {
+  it('initially shows the Cantonese video with the English video visually hidden', () => {
     render(<Player episode={episode} segments={segments} />)
     expect(screen.getByTestId('canto-video-wrapper')).not.toHaveClass('sr-only')
     expect(screen.getByTestId('english-video-wrapper')).toHaveClass('sr-only')
@@ -117,6 +117,36 @@ describe('Player', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Replay in English' }))
 
       // The mocked controller invokes the onDone callback synchronously.
+      expect(cantoHandle.playVideo).toHaveBeenCalled()
+    })
+
+    it('shows the English video (and hides Cantonese) while its audio plays, swapping back when it finishes', () => {
+      const cantoHandle = mockCantoPlayerHandle(12)
+      let capturedOnDone: (() => void) | undefined
+      vi.mocked(SegmentPlaybackController).mockImplementationOnce(function SegmentPlaybackControllerMock(
+        _getPlayer: unknown,
+        onLanguageChange: (lang: string) => void
+      ) {
+        return {
+          playSegment: vi.fn((lang: string, _segment: unknown, onDone?: () => void) => {
+            onLanguageChange(lang)
+            capturedOnDone = onDone
+          }),
+          playBoth: vi.fn(),
+          stop: vi.fn(),
+        } as never
+      })
+
+      render(<Player episode={episode} segments={segments} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Replay in English' }))
+
+      expect(screen.getByTestId('canto-video-wrapper')).toHaveClass('sr-only')
+      expect(screen.getByTestId('english-video-wrapper')).not.toHaveClass('sr-only')
+
+      act(() => capturedOnDone?.())
+
+      expect(screen.getByTestId('canto-video-wrapper')).not.toHaveClass('sr-only')
+      expect(screen.getByTestId('english-video-wrapper')).toHaveClass('sr-only')
       expect(cantoHandle.playVideo).toHaveBeenCalled()
     })
 
