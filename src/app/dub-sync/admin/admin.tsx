@@ -178,11 +178,16 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
   }
 
   const [syncing, setSyncing] = useState(false)
+  // Set when playback should auto-pause on reaching a specific canto time (e.g. reviewing a single
+  // marked segment via its "Play" button) — null means play freely with no stop point. Passing a
+  // value here vs. omitting it is how each call site opts in or out, rather than a separate flag.
+  const [stopAtCantoTime, setStopAtCantoTime] = useState<number | null>(null)
 
-  function startSyncedPlayback() {
+  function startSyncedPlayback(stopAt?: number) {
     if (!episode || !anchorsSet) return
     cantoPlayerRef.current?.playVideo()
     englishPlayerRef.current?.playVideo()
+    setStopAtCantoTime(stopAt ?? null)
     setSyncing(true)
   }
 
@@ -204,7 +209,7 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
     if (!anchorsSet) return
     cantoPlayerRef.current?.seekTo(segment.cantoStart, true)
     englishPlayerRef.current?.seekTo(segment.englishStart, true)
-    startSyncedPlayback()
+    startSyncedPlayback(segment.cantoEnd)
   }
 
   useEffect(() => {
@@ -218,6 +223,23 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
     }, 1000)
     return () => clearInterval(interval)
   }, [syncing, episode, anchorsSet])
+
+  // Auto-pauses once playback reaches stopAtCantoTime (set when reviewing a single segment via its
+  // "Play" button). Polls faster than the resync interval above — that one only needs to be close
+  // enough for eyes/ears, but overshooting here means playing into the next line.
+  useEffect(() => {
+    if (!syncing || stopAtCantoTime === null) return
+    const interval = setInterval(() => {
+      const cantoTime = cantoPlayerRef.current?.getCurrentTime() ?? 0
+      if (cantoTime >= stopAtCantoTime) {
+        cantoPlayerRef.current?.pauseVideo()
+        englishPlayerRef.current?.pauseVideo()
+        setSyncing(false)
+        setStopAtCantoTime(null)
+      }
+    }, 200)
+    return () => clearInterval(interval)
+  }, [syncing, stopAtCantoTime])
 
   // Space bar is the marking key while synced playback is running: hold it down for as long as a
   // character/narrator is speaking, release when they stop. The segment's end is the release
@@ -367,7 +389,7 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
 
             <div className="flex gap-2 mb-4">
               <button
-                onClick={syncing ? stopSyncedPlayback : startSyncedPlayback}
+                onClick={() => (syncing ? stopSyncedPlayback() : startSyncedPlayback())}
                 disabled={!anchorsSet}
                 className="border p-2 rounded"
               >

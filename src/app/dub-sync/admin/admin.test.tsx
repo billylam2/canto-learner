@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('@/components/dub-sync/youtube-player', () => ({
@@ -320,6 +320,57 @@ describe('Admin play segment from the segment table', () => {
     expect(englishHandle.seekTo).toHaveBeenCalledWith(30, true)
     expect(cantoHandle.playVideo).toHaveBeenCalled()
     expect(englishHandle.playVideo).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Pause synced' })).toBeInTheDocument()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('automatically pauses once playback reaches the segment end', () => {
+    vi.useFakeTimers()
+    const refs = captureRefs()
+    let cantoTime = 15
+    const cantoHandle = makeHandle(() => cantoTime)
+    const englishHandle = makeHandle(() => 0)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [existingSegment] }} />)
+    refs.assign(cantoHandle, englishHandle)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }))
+    expect(screen.getByRole('button', { name: 'Pause synced' })).toBeInTheDocument()
+
+    cantoTime = 34 // still before the segment's end (35)
+    act(() => vi.advanceTimersByTime(200))
+    expect(cantoHandle.pauseVideo).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Pause synced' })).toBeInTheDocument()
+
+    cantoTime = 35 // reached the segment's end
+    act(() => vi.advanceTimersByTime(200))
+    expect(cantoHandle.pauseVideo).toHaveBeenCalled()
+    expect(englishHandle.pauseVideo).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Play synced' })).toBeInTheDocument()
+  })
+
+  it('clears the stop point when Play synced is pressed, so playback does not re-stop', () => {
+    vi.useFakeTimers()
+    const refs = captureRefs()
+    let cantoTime = 15
+    const cantoHandle = makeHandle(() => cantoTime)
+    const englishHandle = makeHandle(() => 0)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [existingSegment] }} />)
+    refs.assign(cantoHandle, englishHandle)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play' })) // stop point set at segment end (35)
+    fireEvent.click(screen.getByRole('button', { name: 'Pause synced' })) // stop, then...
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' })) // ...resume freely
+    cantoHandle.pauseVideo.mockClear() // clear the explicit Pause-synced-click call above
+
+    cantoTime = 40 // past the old segment end
+    act(() => vi.advanceTimersByTime(200))
+
+    expect(cantoHandle.pauseVideo).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Pause synced' })).toBeInTheDocument()
   })
 })
