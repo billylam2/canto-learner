@@ -69,6 +69,27 @@ describe('refineAlignment', () => {
     expect(result.confident).toBe(false)
   })
 
+  it('is not confident when the best match sits exactly at the edge of the search window', async () => {
+    // A "perfect" match (avgDistance 0) that only shows up at the very edge of the +/-2s search
+    // window is a classic boundary artifact: it usually means the true match lies further out
+    // than the window allows, not that this is a genuinely good alignment.
+    const maxOffsetFrames = REFINE_ALIGNMENT_FPS * 2 // matches MAX_OFFSET_SECONDS in the module
+    const cantoValues = Array.from({ length: maxOffsetFrames + 1 }, (_, i) => i)
+    const fillerValues = Array(maxOffsetFrames).fill(9999)
+    const extractClipHashes = vi.fn(async ({ videoId }: { videoId: string }) =>
+      hashes(videoId === 'canto-1' ? cantoValues : [...fillerValues, ...cantoValues])
+    )
+
+    const result = await refineAlignment(
+      { cantoneseVideoId: 'canto-1', englishVideoId: 'english-1', cantoTime: 20, englishTime: 18 },
+      { extractClipHashes }
+    )
+
+    expect(result.offsetSeconds).toBeCloseTo(2, 5)
+    expect(result.avgDistance).toBe(0)
+    expect(result.confident).toBe(false)
+  })
+
   it('propagates a clip-extraction failure (e.g. the download failed)', async () => {
     const extractClipHashes = vi.fn(async () => {
       throw new Error('yt-dlp exited with code 1')

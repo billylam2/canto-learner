@@ -69,10 +69,17 @@ export async function refineAlignment(
     throw new Error('Could not find a confident alignment within the search window')
   }
 
+  // When the best match found sits exactly at the edge of the search window, that's usually a
+  // sign the true match lies further out than the window allows — the search was cut off before
+  // it could converge, not because it found a genuinely good match. A low avgDistance doesn't
+  // save this case: with real footage, some frame near the edge frequently looks "good enough"
+  // by chance, which is exactly the false-positive this guards against.
+  const hitSearchBoundary = Math.abs(best.offsetFrames) === maxOffsetFrames
+
   return {
     suggestedEnglishTime: input.englishTime + best.offsetSeconds,
     offsetSeconds: best.offsetSeconds,
     avgDistance: best.avgDistance,
-    confident: best.avgDistance < CONFIDENT_AVG_DISTANCE_THRESHOLD,
+    confident: best.avgDistance < CONFIDENT_AVG_DISTANCE_THRESHOLD && !hitSearchBoundary,
   }
 }
