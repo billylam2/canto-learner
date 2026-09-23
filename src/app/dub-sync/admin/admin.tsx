@@ -5,6 +5,7 @@ import { YoutubePlayer, type YoutubePlayerHandle } from '@/components/dub-sync/y
 import type { DubEpisode, DubSegment } from '@/lib/db/dub-sync'
 import { englishTimeFor, type EpisodeAnchors } from '@/lib/dub-sync/normalize'
 import { computeResyncTarget } from '@/lib/dub-sync/synced-playback'
+import { SegmentPlaybackController } from '@/lib/dub-sync/player-controller'
 import { NewEpisodeForm } from './new-episode-form'
 import { SegmentTable } from './segment-table'
 import { AnchorFields } from './anchor-fields'
@@ -247,27 +248,34 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
   }
 
   const [syncing, setSyncing] = useState(false)
-  // Set when playback should auto-pause on reaching a specific canto time (e.g. reviewing a single
-  // marked segment via its "Play" button) — null means play freely with no stop point. Passing a
-  // value here vs. omitting it is how each call site opts in or out, rather than a separate flag.
-  const [stopAtCantoTime, setStopAtCantoTime] = useState<number | null>(null)
 
   // 1.25x makes marking sessions faster to get through without making the dialogue hard to
   // follow — reset to normal speed once synced playback stops so it doesn't leak into anything
   // else (e.g. a plain video played outside this flow).
   const MARKING_PLAYBACK_RATE = 1.25
 
-  function startSyncedPlayback(stopAt?: number) {
+  const controllerRef = useRef<SegmentPlaybackController | null>(null)
+  useEffect(() => {
+    controllerRef.current = new SegmentPlaybackController(
+      (lang) => (lang === 'canto' ? cantoPlayerRef.current! : englishPlayerRef.current!),
+      // Both videos are always visible side by side in the admin UI, so there's no visibility
+      // swap to make here (unlike the learner-facing player).
+      () => {}
+    )
+  }, [])
+
+  function startSyncedPlayback() {
     if (!episode || !anchorsSet) return
+    controllerRef.current?.stop()
     cantoPlayerRef.current?.setPlaybackRate?.(MARKING_PLAYBACK_RATE)
     englishPlayerRef.current?.setPlaybackRate?.(MARKING_PLAYBACK_RATE)
     cantoPlayerRef.current?.playVideo()
     englishPlayerRef.current?.playVideo()
-    setStopAtCantoTime(stopAt ?? null)
     setSyncing(true)
   }
 
   function stopSyncedPlayback() {
+    controllerRef.current?.stop()
     cantoPlayerRef.current?.pauseVideo()
     englishPlayerRef.current?.pauseVideo()
     cantoPlayerRef.current?.setPlaybackRate?.(1)
@@ -283,11 +291,17 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
     startSyncedPlayback()
   }
 
+  // Reviewing a marked segment plays it Cantonese-first, then English — sequentially, not the
+  // simultaneous side-by-side sync used while marking — so it's decoupled from that entirely
+  // (stops it if running, and never touches `syncing`/the resync interval).
   function playSegment(segment: DubSegment) {
     if (!anchorsSet) return
-    cantoPlayerRef.current?.seekTo(segment.cantoStart, true)
-    englishPlayerRef.current?.seekTo(segment.englishStart, true)
-    startSyncedPlayback(segment.cantoEnd)
+    setSyncing(false)
+    cantoPlayerRef.current?.setPlaybackRate?.(1)
+    englishPlayerRef.current?.setPlaybackRate?.(1)
+    controllerRef.current?.playSegment('canto', { start: segment.cantoStart, end: segment.cantoEnd }, () => {
+      controllerRef.current?.playSegment('english', { start: segment.englishStart, end: segment.englishEnd })
+    })
   }
 
   useEffect(() => {
@@ -301,25 +315,6 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
     }, 1000)
     return () => clearInterval(interval)
   }, [syncing, episode, anchorsSet])
-
-  // Auto-pauses once playback reaches stopAtCantoTime (set when reviewing a single segment via its
-  // "Play" button). Polls faster than the resync interval above — that one only needs to be close
-  // enough for eyes/ears, but overshooting here means playing into the next line.
-  useEffect(() => {
-    if (!syncing || stopAtCantoTime === null) return
-    const interval = setInterval(() => {
-      const cantoTime = cantoPlayerRef.current?.getCurrentTime() ?? 0
-      if (cantoTime >= stopAtCantoTime) {
-        cantoPlayerRef.current?.pauseVideo()
-        englishPlayerRef.current?.pauseVideo()
-        cantoPlayerRef.current?.setPlaybackRate?.(1)
-        englishPlayerRef.current?.setPlaybackRate?.(1)
-        setSyncing(false)
-        setStopAtCantoTime(null)
-      }
-    }, 200)
-    return () => clearInterval(interval)
-  }, [syncing, stopAtCantoTime])
 
   // Space bar is the marking key while synced playback is running: hold it down for as long as a
   // character/narrator is speaking, release when they stop. The segment's end is the release

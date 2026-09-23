@@ -532,9 +532,9 @@ describe('Admin play segment from the segment table', () => {
     vi.stubGlobal('fetch', vi.fn())
   })
 
-  it('seeks both players to the segment and starts synced playback when Play is clicked', () => {
+  it('plays the segment in Cantonese first, not simultaneously with English', () => {
     const refs = captureRefs()
-    const cantoHandle = makeHandle(() => 0)
+    const cantoHandle = makeHandle(() => 15)
     const englishHandle = makeHandle(() => 0)
 
     render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [existingSegment] }} />)
@@ -543,17 +543,16 @@ describe('Admin play segment from the segment table', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Play' }))
 
     expect(cantoHandle.seekTo).toHaveBeenCalledWith(15, true)
-    expect(englishHandle.seekTo).toHaveBeenCalledWith(30, true)
     expect(cantoHandle.playVideo).toHaveBeenCalled()
-    expect(englishHandle.playVideo).toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Pause synced' })).toBeInTheDocument()
+    expect(englishHandle.seekTo).not.toHaveBeenCalled()
+    expect(englishHandle.playVideo).not.toHaveBeenCalled()
   })
 
   afterEach(() => {
     vi.useRealTimers()
   })
 
-  it('automatically pauses once playback reaches the segment end', () => {
+  it('plays the English portion once the Cantonese portion finishes', () => {
     vi.useFakeTimers()
     const refs = captureRefs()
     let cantoTime = 15
@@ -564,21 +563,20 @@ describe('Admin play segment from the segment table', () => {
     refs.assign(cantoHandle, englishHandle)
 
     fireEvent.click(screen.getByRole('button', { name: 'Play' }))
-    expect(screen.getByRole('button', { name: 'Pause synced' })).toBeInTheDocument()
 
     cantoTime = 34 // still before the segment's end (35)
     act(() => vi.advanceTimersByTime(200))
     expect(cantoHandle.pauseVideo).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Pause synced' })).toBeInTheDocument()
+    expect(englishHandle.playVideo).not.toHaveBeenCalled()
 
     cantoTime = 35 // reached the segment's end
     act(() => vi.advanceTimersByTime(200))
     expect(cantoHandle.pauseVideo).toHaveBeenCalled()
-    expect(englishHandle.pauseVideo).toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Play synced' })).toBeInTheDocument()
+    expect(englishHandle.seekTo).toHaveBeenCalledWith(30, true)
+    expect(englishHandle.playVideo).toHaveBeenCalled()
   })
 
-  it('clears the stop point when Play synced is pressed, so playback does not re-stop', () => {
+  it('cancels a segment review in progress if synced playback is started instead', () => {
     vi.useFakeTimers()
     const refs = captureRefs()
     let cantoTime = 15
@@ -588,16 +586,17 @@ describe('Admin play segment from the segment table', () => {
     render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [existingSegment] }} />)
     refs.assign(cantoHandle, englishHandle)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Play' })) // stop point set at segment end (35)
-    fireEvent.click(screen.getByRole('button', { name: 'Pause synced' })) // stop, then...
-    fireEvent.click(screen.getByRole('button', { name: 'Play synced' })) // ...resume freely
-    cantoHandle.pauseVideo.mockClear() // clear the explicit Pause-synced-click call above
+    fireEvent.click(screen.getByRole('button', { name: 'Play' })) // reviewing seg-1 (canto 15-35)
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' })) // switches modes
+    englishHandle.playVideo.mockClear()
+    englishHandle.seekTo.mockClear()
 
-    cantoTime = 40 // past the old segment end
+    cantoTime = 35 // would have been the old segment's end
     act(() => vi.advanceTimersByTime(200))
 
-    expect(cantoHandle.pauseVideo).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Pause synced' })).toBeInTheDocument()
+    // The old segment-review chain must be cancelled, not fire English on its own mid-sync.
+    expect(englishHandle.playVideo).not.toHaveBeenCalled()
+    expect(englishHandle.seekTo).not.toHaveBeenCalled()
   })
 })
 
