@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
-import { refineAlignment, REFINE_ALIGNMENT_WINDOW_SECONDS, REFINE_ALIGNMENT_FPS } from './refine-alignment'
+import {
+  refineAlignment,
+  REFINE_ALIGNMENT_WINDOW_SECONDS,
+  REFINE_ALIGNMENT_FPS,
+  WIDE_RETRY_WINDOW_SECONDS,
+} from './refine-alignment'
 import type { FrameHash } from './frame-hash'
 
 function hashes(values: number[]): FrameHash[] {
@@ -88,6 +93,56 @@ describe('refineAlignment', () => {
     expect(result.offsetSeconds).toBeCloseTo(2, 5)
     expect(result.avgDistance).toBe(0)
     expect(result.confident).toBe(false)
+  })
+
+  it('retries with a wider window when the narrow search is unconfident, and uses that result on success', async () => {
+    const shared = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    const allZero = 0n
+    const allOnes = (1n << 64n) - 1n
+
+    const extractClipHashes = vi.fn(
+      async ({ videoId, windowSeconds }: { videoId: string; windowSeconds: number }) => {
+        if (windowSeconds === REFINE_ALIGNMENT_WINDOW_SECONDS) {
+          // Narrow window: no real signal — every offset looks equally bad.
+          return videoId === 'canto-1' ? [allZero, allZero, allZero, allZero] : [allOnes, allOnes, allOnes, allOnes]
+        }
+        // Wide window (the retry): a clear, confident match shifted 5 frames (0.5s) later.
+        if (videoId === 'canto-1') return hashes(shared.slice(0, 10))
+        return hashes([0, 0, 0, 0, 0, ...shared.slice(0, 10)])
+      }
+    )
+
+    const result = await refineAlignment(
+      { cantoneseVideoId: 'canto-1', englishVideoId: 'english-1', cantoTime: 20, englishTime: 18 },
+      { extractClipHashes }
+    )
+
+    expect(extractClipHashes).toHaveBeenCalledWith(
+      expect.objectContaining({ videoId: 'canto-1', windowSeconds: REFINE_ALIGNMENT_WINDOW_SECONDS })
+    )
+    expect(extractClipHashes).toHaveBeenCalledWith(
+      expect.objectContaining({ videoId: 'canto-1', windowSeconds: WIDE_RETRY_WINDOW_SECONDS })
+    )
+    expect(result.offsetSeconds).toBeCloseTo(0.5, 5)
+    expect(result.avgDistance).toBe(0)
+    expect(result.confident).toBe(true)
+  })
+
+  it('does not bother retrying wider when the narrow search is already confident', async () => {
+    const shared = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    const extractClipHashes = vi.fn(async ({ videoId }: { videoId: string }) => {
+      if (videoId === 'canto-1') return hashes(shared.slice(0, 10))
+      return hashes([0, 0, 0, 0, 0, ...shared.slice(0, 10)])
+    })
+
+    await refineAlignment(
+      { cantoneseVideoId: 'canto-1', englishVideoId: 'english-1', cantoTime: 20, englishTime: 18 },
+      { extractClipHashes }
+    )
+
+    expect(extractClipHashes).not.toHaveBeenCalledWith(
+      expect.objectContaining({ windowSeconds: WIDE_RETRY_WINDOW_SECONDS })
+    )
   })
 
   it('propagates a clip-extraction failure (e.g. the download failed)', async () => {
