@@ -11,6 +11,10 @@ import {
   listSegments,
   updateSegment,
   deleteSegment,
+  listResyncCheckpoints,
+  createResyncCheckpoint,
+  updateResyncCheckpoint,
+  deleteResyncCheckpoint,
 } from './dub-sync'
 
 const episodeRow = {
@@ -340,5 +344,101 @@ describe('deleteSegment', () => {
   it('throws when the delete fails', async () => {
     const supabase = makeDeleteSegmentMock({ error: { message: 'boom' } })
     await expect(deleteSegment(supabase, 'seg-1')).rejects.toThrow('Failed to delete segment seg-1: boom')
+  })
+})
+
+const checkpointRow = {
+  id: 'chk-1',
+  episode_id: 'ep-1',
+  canto_time: 60,
+  english_time: 100,
+}
+
+function makeListCheckpointsMock(overrides: { data: unknown; error: unknown }) {
+  const order = vi.fn().mockResolvedValue(overrides)
+  const eq = vi.fn().mockReturnValue({ order })
+  const select = vi.fn().mockReturnValue({ eq })
+  const from = vi.fn().mockReturnValue({ select })
+  return { from } as unknown as SupabaseClient
+}
+
+describe('listResyncCheckpoints', () => {
+  it('returns checkpoints ordered by canto_time', async () => {
+    const supabase = makeListCheckpointsMock({ data: [checkpointRow], error: null })
+    const result = await listResyncCheckpoints(supabase, 'ep-1')
+    expect(result).toEqual([{ id: 'chk-1', episodeId: 'ep-1', cantoTime: 60, englishTime: 100 }])
+  })
+
+  it('throws when the query fails', async () => {
+    const supabase = makeListCheckpointsMock({ data: null, error: { message: 'boom' } })
+    await expect(listResyncCheckpoints(supabase, 'ep-1')).rejects.toThrow(
+      'Failed to list resync checkpoints for episode ep-1: boom'
+    )
+  })
+})
+
+function makeCreateCheckpointMock(overrides: { single?: { data: unknown; error: unknown } }) {
+  const single = vi.fn().mockResolvedValue(overrides.single ?? { data: checkpointRow, error: null })
+  const select = vi.fn().mockReturnValue({ single })
+  const insert = vi.fn().mockReturnValue({ select })
+  const from = vi.fn().mockReturnValue({ insert })
+  return { from } as unknown as SupabaseClient
+}
+
+describe('createResyncCheckpoint', () => {
+  it('creates a checkpoint and returns it mapped to camelCase', async () => {
+    const supabase = makeCreateCheckpointMock({})
+    const result = await createResyncCheckpoint(supabase, 'ep-1', { cantoTime: 60, englishTime: 100 })
+    expect(result).toEqual({ id: 'chk-1', episodeId: 'ep-1', cantoTime: 60, englishTime: 100 })
+  })
+
+  it('throws when the insert fails', async () => {
+    const supabase = makeCreateCheckpointMock({ single: { data: null, error: { message: 'boom' } } })
+    await expect(createResyncCheckpoint(supabase, 'ep-1', { cantoTime: 60, englishTime: 100 })).rejects.toThrow(
+      'Failed to create resync checkpoint for episode ep-1: boom'
+    )
+  })
+})
+
+function makeUpdateCheckpointMock(overrides: { single?: { data: unknown; error: unknown } }) {
+  const single = vi.fn().mockResolvedValue(overrides.single ?? { data: checkpointRow, error: null })
+  const select = vi.fn().mockReturnValue({ single })
+  const eq = vi.fn().mockReturnValue({ select })
+  const update = vi.fn().mockReturnValue({ eq })
+  const from = vi.fn().mockReturnValue({ update })
+  return { from } as unknown as SupabaseClient
+}
+
+describe('updateResyncCheckpoint', () => {
+  it('returns the updated checkpoint', async () => {
+    const supabase = makeUpdateCheckpointMock({ single: { data: { ...checkpointRow, canto_time: 65 }, error: null } })
+    const result = await updateResyncCheckpoint(supabase, 'chk-1', { cantoTime: 65 })
+    expect(result.cantoTime).toBe(65)
+  })
+
+  it('throws when the update fails', async () => {
+    const supabase = makeUpdateCheckpointMock({ single: { data: null, error: { message: 'boom' } } })
+    await expect(updateResyncCheckpoint(supabase, 'chk-1', { cantoTime: 65 })).rejects.toThrow(
+      'Failed to update resync checkpoint chk-1: boom'
+    )
+  })
+})
+
+function makeDeleteCheckpointMock(overrides: { error: unknown }) {
+  const eq = vi.fn().mockResolvedValue(overrides)
+  const del = vi.fn().mockReturnValue({ eq })
+  const from = vi.fn().mockReturnValue({ delete: del })
+  return { from } as unknown as SupabaseClient
+}
+
+describe('deleteResyncCheckpoint', () => {
+  it('resolves when the delete succeeds', async () => {
+    const supabase = makeDeleteCheckpointMock({ error: null })
+    await expect(deleteResyncCheckpoint(supabase, 'chk-1')).resolves.toBeUndefined()
+  })
+
+  it('throws when the delete fails', async () => {
+    const supabase = makeDeleteCheckpointMock({ error: { message: 'boom' } })
+    await expect(deleteResyncCheckpoint(supabase, 'chk-1')).rejects.toThrow('Failed to delete resync checkpoint chk-1: boom')
   })
 })

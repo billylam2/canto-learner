@@ -271,3 +271,93 @@ export async function deleteSegment(supabase: SupabaseClient, segmentId: string)
     throw new Error(`Failed to delete segment ${segmentId}: ${error.message}`)
   }
 }
+
+export interface DubResyncCheckpoint {
+  id: string
+  episodeId: string
+  cantoTime: number
+  englishTime: number
+}
+
+interface DubResyncCheckpointRow {
+  id: string
+  episode_id: string
+  canto_time: number
+  english_time: number
+}
+
+function toDubResyncCheckpoint(row: DubResyncCheckpointRow): DubResyncCheckpoint {
+  return {
+    id: row.id,
+    episodeId: row.episode_id,
+    cantoTime: row.canto_time,
+    englishTime: row.english_time,
+  }
+}
+
+export interface UpdateResyncCheckpointInput {
+  cantoTime?: number
+  englishTime?: number
+}
+
+export async function listResyncCheckpoints(
+  supabase: SupabaseClient,
+  episodeId: string
+): Promise<DubResyncCheckpoint[]> {
+  const { data, error } = await supabase
+    .from('dub_sync_checkpoints')
+    .select('*')
+    .eq('episode_id', episodeId)
+    .order('canto_time', { ascending: true })
+
+  if (error) {
+    throw new Error(`Failed to list resync checkpoints for episode ${episodeId}: ${error.message}`)
+  }
+  return ((data ?? []) as DubResyncCheckpointRow[]).map(toDubResyncCheckpoint)
+}
+
+export async function createResyncCheckpoint(
+  supabase: SupabaseClient,
+  episodeId: string,
+  input: { cantoTime: number; englishTime: number }
+): Promise<DubResyncCheckpoint> {
+  const { data, error } = await supabase
+    .from('dub_sync_checkpoints')
+    .insert({ episode_id: episodeId, canto_time: input.cantoTime, english_time: input.englishTime })
+    .select('*')
+    .single()
+
+  if (error || !data) {
+    throw new Error(`Failed to create resync checkpoint for episode ${episodeId}: ${error?.message ?? 'unknown error'}`)
+  }
+  return toDubResyncCheckpoint(data as DubResyncCheckpointRow)
+}
+
+export async function updateResyncCheckpoint(
+  supabase: SupabaseClient,
+  checkpointId: string,
+  patch: UpdateResyncCheckpointInput
+): Promise<DubResyncCheckpoint> {
+  const updates: Record<string, unknown> = {}
+  if (patch.cantoTime !== undefined) updates.canto_time = patch.cantoTime
+  if (patch.englishTime !== undefined) updates.english_time = patch.englishTime
+
+  const { data, error } = await supabase
+    .from('dub_sync_checkpoints')
+    .update(updates)
+    .eq('id', checkpointId)
+    .select('*')
+    .single()
+
+  if (error || !data) {
+    throw new Error(`Failed to update resync checkpoint ${checkpointId}: ${error?.message ?? 'unknown error'}`)
+  }
+  return toDubResyncCheckpoint(data as DubResyncCheckpointRow)
+}
+
+export async function deleteResyncCheckpoint(supabase: SupabaseClient, checkpointId: string): Promise<void> {
+  const { error } = await supabase.from('dub_sync_checkpoints').delete().eq('id', checkpointId)
+  if (error) {
+    throw new Error(`Failed to delete resync checkpoint ${checkpointId}: ${error.message}`)
+  }
+}
