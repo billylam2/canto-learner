@@ -57,12 +57,9 @@ describe('NewEpisodeForm', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Failed to create episode'))
   })
 
-  it('auto-populates the title by combining both fetched video titles', async () => {
+  it('auto-populates the title from the English video only', async () => {
     vi.mocked(fetch).mockImplementation((url: unknown) => {
       const u = String(url)
-      if (u.includes('videoId=canto-123')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ title: 'Cantonese Title' }) } as Response)
-      }
       if (u.includes('videoId=eng-456')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ title: 'English Title' }) } as Response)
       }
@@ -71,20 +68,26 @@ describe('NewEpisodeForm', () => {
 
     render(<NewEpisodeForm onCreated={vi.fn()} />)
 
-    fireEvent.change(screen.getByLabelText('Cantonese video ID'), { target: { value: 'canto-123' } })
-    fireEvent.blur(screen.getByLabelText('Cantonese video ID'))
-    await waitFor(() => expect(screen.getByLabelText('Title')).toHaveValue('Cantonese Title'))
-
     fireEvent.change(screen.getByLabelText('English video ID'), { target: { value: 'eng-456' } })
     fireEvent.blur(screen.getByLabelText('English video ID'))
-    await waitFor(() => expect(screen.getByLabelText('Title')).toHaveValue('Cantonese Title / English Title'))
+
+    await waitFor(() => expect(screen.getByLabelText('Title')).toHaveValue('English Title'))
+  })
+
+  it('does not fetch a title from the Cantonese video ID field', async () => {
+    render(<NewEpisodeForm onCreated={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText('Cantonese video ID'), { target: { value: 'canto-123' } })
+    fireEvent.blur(screen.getByLabelText('Cantonese video ID'))
+
+    expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining('videoId=canto-123'))
   })
 
   it('does not overwrite a manually-typed title', async () => {
     vi.mocked(fetch).mockImplementation((url: unknown) => {
       const u = String(url)
-      if (u.includes('videoId=canto-123')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ title: 'Cantonese Title' }) } as Response)
+      if (u.includes('videoId=eng-456')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ title: 'English Title' }) } as Response)
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ episode: {} }) } as Response)
     })
@@ -92,10 +95,10 @@ describe('NewEpisodeForm', () => {
     render(<NewEpisodeForm onCreated={vi.fn()} />)
 
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'My Custom Title' } })
-    fireEvent.change(screen.getByLabelText('Cantonese video ID'), { target: { value: 'canto-123' } })
-    fireEvent.blur(screen.getByLabelText('Cantonese video ID'))
+    fireEvent.change(screen.getByLabelText('English video ID'), { target: { value: 'eng-456' } })
+    fireEvent.blur(screen.getByLabelText('English video ID'))
 
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringContaining('videoId=canto-123')))
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringContaining('videoId=eng-456')))
     expect(screen.getByLabelText('Title')).toHaveValue('My Custom Title')
   })
 })

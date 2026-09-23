@@ -14,16 +14,16 @@ export function EpisodeSidebar({ episodes, currentEpisodeId }: EpisodeSidebarPro
         <Link
           key={episode.id}
           href={`/dub-sync/${episode.id}`}
-          className={`flex gap-2 p-2 rounded ${episode.id === currentEpisodeId ? 'bg-gray-200' : ''}`}
+          className={`flex items-start gap-2 p-2 rounded ${episode.id === currentEpisodeId ? 'bg-gray-200' : ''}`}
         >
           <Image
             src={`https://i.ytimg.com/vi/${episode.cantoneseVideoId}/mqdefault.jpg`}
             alt=""
             width={96}
             height={54}
-            className="rounded shrink-0 object-cover"
+            className="rounded shrink-0 w-24 h-[54px] object-cover"
           />
-          <span className="text-sm">{episode.title}</span>
+          <span className="text-sm line-clamp-2">{episode.title}</span>
         </Link>
       ))}
     </aside>

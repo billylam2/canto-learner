@@ -7,46 +7,28 @@ interface NewEpisodeFormProps {
   onCreated: (episode: DubEpisode) => void
 }
 
-function combineTitles(cantoTitle: string | null, englishTitle: string | null): string {
-  if (cantoTitle && englishTitle) return `${cantoTitle} / ${englishTitle}`
-  return cantoTitle ?? englishTitle ?? ''
-}
-
 export function NewEpisodeForm({ onCreated }: NewEpisodeFormProps) {
   const [title, setTitle] = useState('')
   const [titleManuallyEdited, setTitleManuallyEdited] = useState(false)
   const [cantoneseVideoId, setCantoneseVideoId] = useState('')
   const [englishVideoId, setEnglishVideoId] = useState('')
-  const [cantoTitle, setCantoTitle] = useState<string | null>(null)
-  const [englishTitle, setEnglishTitle] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-
-  async function fetchAndApplyTitle(videoId: string, apply: (fetchedTitle: string) => void) {
-    if (!videoId) return
-    const response = await fetch(`/api/dub-sync/youtube-title?videoId=${encodeURIComponent(videoId)}`)
-    if (!response.ok) return
-    const { title: fetchedTitle } = await response.json()
-    apply(fetchedTitle)
-  }
 
   function handleTitleChange(value: string) {
     setTitle(value)
     setTitleManuallyEdited(true)
   }
 
-  async function handleCantoneseVideoIdBlur() {
-    await fetchAndApplyTitle(cantoneseVideoId, (fetchedTitle) => {
-      setCantoTitle(fetchedTitle)
-      if (!titleManuallyEdited) setTitle(combineTitles(fetchedTitle, englishTitle))
-    })
-  }
-
+  // Defaults the title to the English video's own title — the Cantonese video ID isn't used for
+  // this, since its title is usually just the Cantonese title with romanization/captions notes
+  // that aren't useful as the episode's display title.
   async function handleEnglishVideoIdBlur() {
-    await fetchAndApplyTitle(englishVideoId, (fetchedTitle) => {
-      setEnglishTitle(fetchedTitle)
-      if (!titleManuallyEdited) setTitle(combineTitles(cantoTitle, fetchedTitle))
-    })
+    if (!englishVideoId) return
+    const response = await fetch(`/api/dub-sync/youtube-title?videoId=${encodeURIComponent(englishVideoId)}`)
+    if (!response.ok) return
+    const { title: fetchedTitle } = await response.json()
+    if (!titleManuallyEdited) setTitle(fetchedTitle)
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -70,8 +52,6 @@ export function NewEpisodeForm({ onCreated }: NewEpisodeFormProps) {
     setTitleManuallyEdited(false)
     setCantoneseVideoId('')
     setEnglishVideoId('')
-    setCantoTitle(null)
-    setEnglishTitle(null)
     onCreated(episode)
   }
 
@@ -91,7 +71,6 @@ export function NewEpisodeForm({ onCreated }: NewEpisodeFormProps) {
         <input
           value={cantoneseVideoId}
           onChange={(e) => setCantoneseVideoId(e.target.value)}
-          onBlur={handleCantoneseVideoIdBlur}
           required
           className="border p-2 rounded"
         />
