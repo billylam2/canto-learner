@@ -51,7 +51,21 @@ function run(command: string, args: string[], onStdout?: (chunk: Buffer) => void
 
 function waitForExit(child: ChildProcess, name: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    child.on('error', reject)
+    child.on('error', (error) => {
+      // Node reports a missing executable as a generic ENOENT on the spawn call itself,
+      // rather than anything mentioning the binary by name in a readable way — most commonly
+      // hit by running this in a serverless environment (e.g. Vercel) that doesn't have
+      // yt-dlp/ffmpeg installed, since this feature shells out to them as real system binaries.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        reject(
+          new Error(
+            `${name} is not installed (or not on PATH) in this environment. "Refine precision" requires yt-dlp and ffmpeg as system binaries, which aren't available on Vercel's serverless functions — run it from local dev instead.`
+          )
+        )
+        return
+      }
+      reject(error)
+    })
     child.on('close', (code) => {
       if (code === 0) resolve()
       else reject(new Error(`${name} exited with code ${code}`))
