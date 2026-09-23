@@ -21,6 +21,11 @@ export interface AlternatingSegment {
   englishEnd: number
 }
 
+// A manual seek (forward or backward) moves currentTime by far more than one poll interval's
+// worth of natural playback ever would, so it's used to tell "the user jumped somewhere" apart
+// from "playback reached the segment boundary on its own."
+const SEEK_JUMP_THRESHOLD_SECONDS = 2
+
 export class SegmentPlaybackController {
   private timer: ReturnType<typeof setInterval> | null = null
 
@@ -72,9 +77,24 @@ export class SegmentPlaybackController {
     if (index === -1 || index >= segments.length) return
     const segment = segments[index]
     const cantoPlayer = this.getPlayer('canto')
+    let lastKnownTime: number | null = null
 
     this.timer = setInterval(() => {
-      if (cantoPlayer.getCurrentTime() >= segment.cantoEnd) {
+      const currentTime = cantoPlayer.getCurrentTime()
+      const jumped = lastKnownTime !== null && Math.abs(currentTime - lastKnownTime) > SEEK_JUMP_THRESHOLD_SECONDS
+      lastKnownTime = currentTime
+
+      // A manual seek past (or before) this segment's boundary isn't "the segment finished" —
+      // re-locate which segment the new position falls in and resume watching from there,
+      // instead of firing the pause-and-play-English-audio flow the user didn't ask for.
+      if (jumped) {
+        this.stop()
+        const newIndex = segments.findIndex((s) => s.cantoEnd > currentTime)
+        this.watchForSegmentEnd(segments, newIndex)
+        return
+      }
+
+      if (currentTime >= segment.cantoEnd) {
         this.stop()
         cantoPlayer.pauseVideo()
         this.playSegment('english', { start: segment.englishStart, end: segment.englishEnd }, () => {
