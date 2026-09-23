@@ -4,7 +4,7 @@
 
 `englishTimeFor` maps a Cantonese timestamp to the corresponding English timestamp using a single straight line between two fixed points: the episode's content-start and content-end anchors (`src/lib/dub-sync/normalize.ts`). That's the formula behind three things: the resync interval that keeps the English player following along during synced playback, the spacebar handler that computes a marked segment's `englishStart`/`englishEnd`, and caption-based segment generation. A single straight line across an entire episode assumes the two dubs pace identically throughout — in practice they don't (a longer pause here, a rephrased line there), so the line drifts away from the truth as marking progresses further from content start. Because the resync interval keeps chasing that same wrong line, what's on screen still looks synced even as the *computed* times it's chasing become wrong — so segments recorded via the spacebar later in an episode can end up with `englishStart`/`englishEnd` visibly off, without anything on screen signaling that it happened.
 
-This spec adds **resync checkpoints**: extra Cantonese/English time pairs an admin can insert mid-episode, while marking, whenever they notice drift. `englishTimeFor` becomes piecewise-linear across content-start, every checkpoint, and content-end (in `cantoTime` order) instead of one line across the whole episode — a checkpoint only corrects the mapping in its local neighborhood, and every consumer of `englishTimeFor` benefits automatically.
+This spec adds **resync checkpoints**: a Cantonese/English time pair an admin can insert mid-episode, while marking, whenever they notice drift. Each checkpoint is a fixed correction: once Cantonese playback passes that timestamp, `englishTimeFor` applies a constant shift on top of the original content-start/content-end line, from then on, until a later checkpoint supersedes it with its own shift. The original line's pace is never recalculated — nothing here ever needs the English player to play at anything other than its normal fixed rate (see the "no continuous rate changes" note below); a checkpoint only changes what number the formula produces, at the moment it's crossed.
 
 ## Decisions
 
@@ -14,8 +14,10 @@ This spec adds **resync checkpoints**: extra Cantonese/English time pairs an adm
   - **Confirm** captures `{ cantoTime, englishTime }` from both players' current positions, POSTs it as a new checkpoint, and returns to the paused state (`syncing` stays `false` — the admin clicks "Play synced" again to resume, same as every other action here). If the server rejects it (see validation below), the specific error is shown inline and adjustment mode stays open so the admin can nudge further and retry.
   - **Cancel** exits adjustment mode without saving. Nothing needs to be reverted — the resync interval re-settles the English player's position on its own within a second of playback resuming.
   - Entering adjustment mode sets `syncing` to `false` (via the existing `stopSyncedPlayback`-style pause), which — for free — already suspends the resync interval and the spacebar marking listener, since both are already gated on `syncing`. A new `adjustingCheckpoint` boolean state controls only the adjustment UI itself (nudge/preview/confirm/cancel controls replacing the sync controls while true) and the "Resync checkpoint" button's payload capture.
-- **Mapping**: `englishTimeFor` builds the full sorted list of known points — content-start, every checkpoint, content-end, sorted by `cantoTime` — and interpolates linearly between whichever consecutive pair brackets the requested `cantoTime` (extrapolating from the nearest edge segment for a `cantoTime` outside the marked range, same as today). With zero checkpoints this is exactly one segment from content-start to content-end — mathematically identical to today's formula, so existing behavior is unchanged for episodes that don't need checkpoints.
-- **Validation**: a checkpoint is rejected (create or edit) unless it's strictly increasing in *both* `cantoTime` and `englishTime` relative to its immediate neighbors once inserted into the sorted point list (content-start/content-end always count as neighbors at the ends). Otherwise the piecewise mapping would go backwards locally and silently produce inverted/negative-duration segments downstream — the same bug class already guarded against for spacebar marking (`cantoEnd <= pendingStart` discard).
+- **No continuous rate changes**: exactly as the existing synced-marking spec already decided for the resync interval, nothing here ever touches `setPlaybackRate`. A checkpoint's "shift" is a one-time constant added to the formula's output from that Cantonese timestamp forward — applied only via the same two existing discrete mechanisms (the resync interval's periodic `seekTo`, and the formula used to compute a recorded segment's times), never by asking a player to play at a custom continuous speed.
+- **Mapping**: `englishTimeFor` keeps computing the original two-anchor line exactly as it does today (call it the *base* time), unaffected by checkpoints. Separately, it finds the checkpoint with the greatest `cantoTime` that is still `<= cantoT` (the most recently "encountered" one, if any). If none, it returns the base time unchanged. If one exists, its `shift` — computed once, as `checkpoint.englishTime - base time at the checkpoint's own cantoTime` — is added to the current base time. This means: before any checkpoint's `cantoTime`, behavior is identical to today; after one, the output is offset by a constant, deliberately jumping at the instant each checkpoint is crossed rather than blending in gradually — that jump *is* the correction. With zero checkpoints this is exactly today's formula, unchanged, so existing behavior is unaffected for episodes that don't need any.
+- **Validation**: a checkpoint is rejected (create or edit) if its `cantoTime` falls outside the marked content span (`cantoContentStart < cantoTime < cantoContentEnd`), or exactly matches an existing checkpoint's `cantoTime` (ambiguous ordering). Unlike the interpolation-based design this replaced, there's no constraint on `englishTime` relative to other checkpoints — a checkpoint correcting *backward* is legitimate (the Cantonese dub can very well have extra content the English one doesn't, meaning the correct English time for a later point is earlier than previously predicted).
+- **Guarding a backward jump mid-segment**: because a checkpoint's correction can jump backward, it's possible (if a checkpoint happens to be added between the moment a segment's `cantoStart` and `cantoEnd` are captured — an unusual but possible sequence) for the computed `englishEnd` to land at or before `englishStart`. The spacebar `keyup` handler's existing "discard on `cantoEnd <= pendingStart`" guard gains a parallel check — computed `englishEnd <= englishStart` is discarded the same way, instead of saving a nonsensical segment.
 - **Persistence**: checkpoints are saved per episode in Supabase, loaded alongside segments/anchors on the admin page's initial fetch, so an interrupted marking session doesn't lose corrections already made.
 - **Managing checkpoints**: a table under the sync controls lists all of an episode's checkpoints (Cantonese time, English time), each row editable in place — number inputs save on blur via `PATCH`, mirroring `segment-table.tsx`'s existing pattern exactly — plus a Delete button per row. Unlike segment rows' generic "Failed to save — try again", a checkpoint save failure shows the server's specific validation message, since the error here is actionable (nudge the value and retry) rather than transient.
 
@@ -79,31 +81,31 @@ export interface ResyncCheckpoint {
   englishTime: number
 }
 
-interface AnchorPoint {
-  cantoTime: number
-  englishTime: number
-}
+// The original two-anchor line, unaffected by any checkpoint — used both as englishTimeFor's
+// answer before any checkpoint has been reached, and to work out each checkpoint's own shift.
+function baseEnglishTime(cantoT: number, anchors: EpisodeAnchors): number {
+  const { cantoContentStart, cantoContentEnd, englishContentStart, englishContentEnd } = anchors
+  const cantoSpan = cantoContentEnd - cantoContentStart
 
-// The full sorted list of known canto<->english time correspondences for an episode: content
-// start, every resync checkpoint, and content end. englishTimeFor interpolates between
-// consecutive pairs of this list rather than using one line across the whole episode, so a
-// checkpoint only affects the local region around it. DubResyncCheckpoint (id + episodeId +
-// these two fields) satisfies this shape structurally, so callers can pass persisted checkpoints
-// straight through without mapping them first.
-export function buildAnchorPoints(anchors: EpisodeAnchors, checkpoints: ResyncCheckpoint[]): AnchorPoint[] {
-  const points = [
-    { cantoTime: anchors.cantoContentStart, englishTime: anchors.englishContentStart },
-    ...checkpoints,
-    { cantoTime: anchors.cantoContentEnd, englishTime: anchors.englishContentEnd },
-  ]
-  return points.sort((a, b) => a.cantoTime - b.cantoTime)
-}
-
-function bracket(points: AnchorPoint[], cantoT: number): [AnchorPoint, AnchorPoint] {
-  for (let i = 0; i < points.length - 1; i++) {
-    if (cantoT <= points[i + 1].cantoTime) return [points[i], points[i + 1]]
+  if (cantoSpan <= 0) {
+    throw new Error('Invalid anchors: cantoContentEnd must be after cantoContentStart')
   }
-  return [points[points.length - 2], points[points.length - 1]]
+
+  const ratio = (cantoT - cantoContentStart) / cantoSpan
+  return englishContentStart + ratio * (englishContentEnd - englishContentStart)
+}
+
+// The checkpoint with the greatest cantoTime that is still <= cantoT — the last one "encountered"
+// by the time playback reaches cantoT — or null if cantoT is before all of them (or there are
+// none). DubResyncCheckpoint (id + episodeId + these two fields) satisfies this shape
+// structurally, so callers can pass persisted checkpoints straight through without mapping them.
+function mostRecentCheckpoint(checkpoints: ResyncCheckpoint[], cantoT: number): ResyncCheckpoint | null {
+  let active: ResyncCheckpoint | null = null
+  for (const checkpoint of checkpoints) {
+    if (checkpoint.cantoTime > cantoT) continue
+    if (!active || checkpoint.cantoTime > active.cantoTime) active = checkpoint
+  }
+  return active
 }
 
 export function englishTimeFor(
@@ -111,52 +113,40 @@ export function englishTimeFor(
   anchors: EpisodeAnchors,
   checkpoints: ResyncCheckpoint[] = []
 ): number {
-  const points = buildAnchorPoints(anchors, checkpoints)
-  const [lower, upper] = bracket(points, cantoT)
-  const span = upper.cantoTime - lower.cantoTime
+  const base = baseEnglishTime(cantoT, anchors)
+  const active = mostRecentCheckpoint(checkpoints, cantoT)
+  if (!active) return base
 
-  if (span <= 0) {
-    throw new Error('Invalid anchors: cantoContentEnd must be after cantoContentStart')
-  }
-
-  const ratio = (cantoT - lower.cantoTime) / span
-  return lower.englishTime + ratio * (upper.englishTime - lower.englishTime)
+  const shift = active.englishTime - baseEnglishTime(active.cantoTime, anchors)
+  return base + shift
 }
 ```
 
-`bracket` always resolves to `[points[0], points[1]]` when there are exactly two points (the zero-checkpoint case), regardless of `cantoT` — identical to today's unconditional single-line extrapolation, so the existing `normalize.test.ts` assertions keep passing unmodified.
+With zero checkpoints, `mostRecentCheckpoint` always returns `null`, so `englishTimeFor` reduces to exactly today's formula (including throwing on an invalid anchor span) — the existing `normalize.test.ts` assertions keep passing unmodified.
 
 New file `src/lib/dub-sync/resync-checkpoints.ts` (kept separate from `normalize.ts` since this is API-layer input validation, not time-mapping math — it depends on `normalize.ts`, not the other way around):
 
 ```ts
-import { buildAnchorPoints, type EpisodeAnchors, type ResyncCheckpoint } from './normalize'
+import type { EpisodeAnchors, ResyncCheckpoint } from './normalize'
 
-// Ensures inserting or editing this checkpoint keeps the canto->english mapping monotonic: both
-// times must strictly increase from the point immediately before it to the point immediately
-// after, once placed into the full sorted list (content start/end plus every OTHER existing
-// checkpoint — the one being edited, if any, must already be excluded from otherCheckpoints by
-// the caller). Returns an error message, or null if the checkpoint is valid.
+// A checkpoint must fall strictly within the marked content span, and not collide with an
+// existing checkpoint's exact cantoTime (which would make "the most recently encountered
+// checkpoint" ambiguous). There's no constraint relative to other checkpoints' englishTime — a
+// checkpoint correcting backward is legitimate. Returns an error message, or null if valid.
 export function validateCheckpointOrder(
   anchors: EpisodeAnchors,
   otherCheckpoints: ResyncCheckpoint[],
   candidate: ResyncCheckpoint
 ): string | null {
-  const points = buildAnchorPoints(anchors, [...otherCheckpoints, candidate])
-  const index = points.indexOf(candidate)
-  const prev = points[index - 1]
-  const next = points[index + 1]
-
-  if (prev && (candidate.cantoTime <= prev.cantoTime || candidate.englishTime <= prev.englishTime)) {
-    return 'Checkpoint must come after the previous checkpoint in both videos'
+  if (candidate.cantoTime <= anchors.cantoContentStart || candidate.cantoTime >= anchors.cantoContentEnd) {
+    return 'Checkpoint must fall within the marked content'
   }
-  if (next && (candidate.cantoTime >= next.cantoTime || candidate.englishTime >= next.englishTime)) {
-    return 'Checkpoint must come before the next checkpoint in both videos'
+  if (otherCheckpoints.some((checkpoint) => checkpoint.cantoTime === candidate.cantoTime)) {
+    return 'A checkpoint already exists at that Cantonese time'
   }
   return null
 }
 ```
-
-`indexOf(candidate)` relies on reference equality — `candidate` is spread into the array by reference, untouched by `sort`, so this is safe.
 
 ## API
 
@@ -186,7 +176,7 @@ Every existing `englishTimeFor` call site threads the relevant episode's checkpo
 - Add `checkpointsByEpisode` state (parallel to `segmentsByEpisode`, seeded from the page's initial fetch) and `handleCheckpointUpdated`/`handleCheckpointDeleted`/`handleCheckpointCreated` handlers mirroring the existing segment ones.
 - Add `adjustingCheckpoint` boolean state, and handlers: `enterCheckpointAdjustment` (calls the existing `stopSyncedPlayback` — pausing both players, resetting playback rate to 1x so preview listening isn't sped up, and setting `syncing` to `false` — then sets `adjustingCheckpoint` to `true`), `nudgeEnglish(deltaSeconds)`, `previewPlay`/`previewPause` (play/pause both players directly, independent of `syncing`), `confirmCheckpoint` (POSTs, appends+resorts into `checkpointsByEpisode` on success, shows the server error inline and stays open on failure, otherwise sets `adjustingCheckpoint` to `false`), `cancelCheckpointAdjustment` (just sets `adjustingCheckpoint` to `false`).
 - The "Resync checkpoint" button and the adjustment panel (nudge buttons, preview Play/Pause, Confirm/Cancel, inline error) render in the sync-controls area described in Decisions; the panel replaces the "Hold SPACE..." instruction line while `adjustingCheckpoint` is true.
-- Every `englishTimeFor` call in this file passes `checkpointsByEpisode[episode.id] ?? []` as the third argument.
+- Every `englishTimeFor` call in this file passes `checkpointsByEpisode[episode.id] ?? []` as the third argument. The spacebar `keyup` handler's segment-creation branch adds the `englishEnd <= englishStart` discard described in Decisions, alongside its existing `cantoEnd <= pendingStart` check.
 - New `CheckpointTable` component (new file `src/app/dub-sync/admin/checkpoint-table.tsx`, structured like `segment-table.tsx`: a table + per-row component with editable `cantoTime`/`englishTime` number inputs saving on blur via `PATCH`, and a Delete button) renders unconditionally near the sync controls, above `SegmentTable`.
 
 `src/app/dub-sync/admin/page.tsx`: adds a `listResyncCheckpoints` loop building `checkpointsByEpisode`, passed to `Admin` alongside `segmentsByEpisode`.
@@ -195,15 +185,15 @@ Every existing `englishTimeFor` call site threads the relevant episode's checkpo
 
 ## Testing
 
-- `normalize.test.ts`: existing zero-checkpoint assertions stay as regression coverage; new cases for one checkpoint (interpolates within each of the two resulting segments correctly) and multiple checkpoints (correct segment selected for a `cantoTime` in each region, including before the first checkpoint and after the last).
-- New `resync-checkpoints.test.ts`: `validateCheckpointOrder` — valid checkpoint between two existing ones; rejects one at or before the previous checkpoint's `cantoTime`/`englishTime`; rejects one at or after the next checkpoint's; valid with zero existing checkpoints; valid checkpoint being edited (excluded from `otherCheckpoints`) doesn't reject against its own prior value.
+- `normalize.test.ts`: existing zero-checkpoint assertions stay as regression coverage; new cases for a `cantoT` before the first checkpoint (base time, unaffected), between two checkpoints (the earlier one's shift applies), after the last checkpoint (the last one's shift applies), and a checkpoint whose `englishTime` corrects backward relative to the base line's prediction.
+- New `resync-checkpoints.test.ts`: `validateCheckpointOrder` — valid checkpoint within content bounds; rejects one at/before `cantoContentStart` or at/after `cantoContentEnd`; rejects one colliding with an existing checkpoint's exact `cantoTime`; valid with zero existing checkpoints; a checkpoint being edited (excluded from `otherCheckpoints`) doesn't collide against its own prior value.
 - `dub-sync.test.ts`: `createResyncCheckpoint`, `updateResyncCheckpoint`, `deleteResyncCheckpoint`, `listResyncCheckpoints` (ordering by `canto_time`).
 - New route tests for `checkpoints/route.ts` and `checkpoints/[checkpointId]/route.ts`: auth check, missing-field 400, episode-not-found 404, validation-failure 400 (with the specific message), success (201/200).
-- `synced-playback.test.ts`: `computeResyncTarget` given checkpoints resolves against the piecewise mapping, not just the two content anchors.
-- `admin.test.tsx`: "Resync checkpoint" button entering adjustment mode (pauses both players, hides sync controls, shows the panel); nudge buttons shifting only the English player's current time by the expected delta; preview Play/Pause acting on both players without touching `syncing`; Confirm posting and adding the returned checkpoint to the table; Confirm failure keeping adjustment mode open and showing the server message; Cancel discarding without a request; the checkpoint table's inline edit/delete (mirroring the existing segment-table tests).
+- `synced-playback.test.ts`: `computeResyncTarget` given checkpoints resolves against the shifted mapping, not just the two content anchors.
+- `admin.test.tsx`: "Resync checkpoint" button entering adjustment mode (pauses both players, hides sync controls, shows the panel); nudge buttons shifting only the English player's current time by the expected delta; preview Play/Pause acting on both players without touching `syncing`; Confirm posting and adding the returned checkpoint to the table; Confirm failure keeping adjustment mode open and showing the server message; Cancel discarding without a request; the spacebar handler's new `englishEnd <= englishStart` discard case; the checkpoint table's inline edit/delete (mirroring the existing segment-table tests).
 
 ## Out of Scope
 
 - Any automatic drift *detection* (e.g. periodically re-running the frame-hash alignment search used by "Refine precision" to suggest a checkpoint on its own) — checkpoints are added by the admin's own judgment only, when they notice drift while marking.
-- Visualizing the piecewise mapping (e.g. a graph of canto-time vs. english-time showing each segment) — the checkpoint table's plain list of time pairs is enough to manage them.
+- Visualizing the shifted mapping (e.g. a graph of canto-time vs. english-time showing each correction) — the checkpoint table's plain list of time pairs is enough to manage them.
 - Applying checkpoints retroactively to already-recorded segments — this only affects segments recorded (or caption-generated) after a checkpoint exists; correcting earlier segments is a separate, manual edit-the-segment-row task, same as any other segment correction today.
