@@ -22,17 +22,27 @@ export function Player({ episode, segments, episodes }: PlayerProps) {
   const [replayMessage, setReplayMessage] = useState<string | null>(null)
   const [visibleLanguage, setVisibleLanguage] = useState<'canto' | 'english'>('canto')
   const [alternating, setAlternating] = useState(false)
+  // isFullscreen drives our own CSS full-viewport treatment; nativeFullscreenActive tracks
+  // whether the browser's Fullscreen API actually engaged (confirmed via the fullscreenchange
+  // event below). They're deliberately separate: iOS Safari has no support for calling
+  // requestFullscreen() on a plain element (only <video> gets native fullscreen there), so
+  // requestFullscreen() silently does nothing — without this split, clicking Fullscreen would
+  // just appear broken. isFullscreen alone still gives the full-viewport video treatment
+  // everywhere; nativeFullscreenActive only affects whether we also show our own exit control
+  // (unnecessary when the browser's own Esc-to-exit is available).
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [nativeFullscreenActive, setNativeFullscreenActive] = useState(false)
   const playerContainerRef = useRef<HTMLDivElement>(null)
 
   const controllerRef = useRef<SegmentPlaybackController | null>(null)
 
-  // Tracks whether OUR container (video wrappers + controls together) is the fullscreened
-  // element, rather than relying on the toggle button's own click state — the browser can also
-  // exit fullscreen on its own (Esc key), which this listener catches too.
   useEffect(() => {
     function handleFullscreenChange() {
-      setIsFullscreen(document.fullscreenElement === playerContainerRef.current)
+      const active = document.fullscreenElement === playerContainerRef.current
+      setNativeFullscreenActive(active)
+      // The browser can exit fullscreen on its own (Esc key) — follow it out of our own
+      // full-viewport state too, rather than leaving a video-sized black rectangle stranded.
+      if (!active) setIsFullscreen(false)
     }
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
@@ -41,18 +51,30 @@ export function Player({ episode, segments, episodes }: PlayerProps) {
   // Sizes the visible video to fill as much of the screen as the 16:9 aspect ratio allows
   // (the same min(100vw, 100vh*16/9) x min(100vh, 100vw*9/16) formula browsers use for native
   // fullscreen video), and forces the underlying iframe (which YT sizes via width/height HTML
-  // attributes, not CSS) to fill that box.
+  // attributes, not CSS) to fill that box. Outside fullscreen, the iframe is instead sized
+  // fluidly (100% width, 16:9 height) so it shrinks to fit narrow/mobile viewports rather than
+  // staying at a fixed pixel width and overflowing into the sidebar.
   function videoWrapperClassName(isVisibleVideo: boolean): string | undefined {
     if (!isVisibleVideo) return 'sr-only'
-    if (!isFullscreen) return undefined
-    return '[&_iframe]:w-full [&_iframe]:h-full w-[min(100vw,177.78vh)] h-[min(100vh,56.25vw)]'
+    if (isFullscreen) return '[&_iframe]:w-full [&_iframe]:h-full w-[min(100vw,177.78vh)] h-[min(100vh,56.25vw)]'
+    return '[&_iframe]:w-full [&_iframe]:h-auto [&_iframe]:aspect-video w-full max-w-[960px]'
   }
 
   function toggleFullscreen() {
-    if (document.fullscreenElement === playerContainerRef.current) {
-      document.exitFullscreen()
-    } else {
-      playerContainerRef.current?.requestFullscreen()
+    if (isFullscreen) {
+      setIsFullscreen(false)
+      if (nativeFullscreenActive) document.exitFullscreen().catch(() => {})
+      return
+    }
+    setIsFullscreen(true)
+    const element = playerContainerRef.current
+    if (element && typeof element.requestFullscreen === 'function') {
+      try {
+        element.requestFullscreen().catch(() => {})
+      } catch {
+        // Some browsers throw synchronously rather than rejecting the promise; either way,
+        // isFullscreen above already applies the CSS-only fallback treatment.
+      }
     }
   }
 
@@ -100,8 +122,8 @@ export function Player({ episode, segments, episodes }: PlayerProps) {
   }
 
   return (
-    <main className="flex gap-6 p-6">
-      <div className="flex-1 max-w-3xl">
+    <main className="flex flex-col lg:flex-row gap-6 p-6">
+      <div className="flex-1 min-w-0 lg:max-w-3xl">
       <h1 className="text-2xl font-bold mb-4">{episode.title}</h1>
 
       {/* Wraps the videos AND the controls together so fullscreen (via our own button below,
@@ -140,7 +162,9 @@ export function Player({ episode, segments, episodes }: PlayerProps) {
         {/* In fullscreen, the video fills the screen (see videoWrapperClassName above) with
             nothing overlaid on top of it — no controls, so nothing sits over the video's own
             captions. Exiting relies on the browser's own fullscreen exit (Esc key), which the
-            fullscreenchange listener above already picks up. */}
+            fullscreenchange listener above already picks up — EXCEPT when native fullscreen
+            never actually engaged (iOS Safari), where Esc doesn't apply either, so a small exit
+            control is shown instead as the only way out. */}
         {!isFullscreen && (
           <div>
             <div className="flex gap-2">
@@ -157,6 +181,14 @@ export function Player({ episode, segments, episodes }: PlayerProps) {
 
             {replayMessage && <p className="text-gray-600">{replayMessage}</p>}
           </div>
+        )}
+        {isFullscreen && !nativeFullscreenActive && (
+          <button
+            onClick={toggleFullscreen}
+            className="absolute top-4 right-4 border border-white text-white bg-black/50 p-2 rounded"
+          >
+            Exit fullscreen
+          </button>
         )}
       </div>
       </div>

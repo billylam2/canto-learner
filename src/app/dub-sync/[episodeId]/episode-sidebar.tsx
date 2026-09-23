@@ -9,7 +9,7 @@ interface EpisodeSidebarProps {
 
 export function EpisodeSidebar({ episodes, currentEpisodeId }: EpisodeSidebarProps) {
   return (
-    <aside className="w-72 flex flex-col gap-2 shrink-0" aria-label="Playlist">
+    <aside className="w-full lg:w-72 flex flex-col gap-2 lg:shrink-0" aria-label="Playlist">
       {episodes.map((episode) => (
         <Link
           key={episode.id}

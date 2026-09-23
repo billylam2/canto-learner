@@ -268,6 +268,23 @@ describe('Player', () => {
       expect(screen.getByRole('button', { name: 'Replay in English' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Play alternating' })).toBeInTheDocument()
     })
+
+    it('falls back to a CSS-only fullscreen with its own exit control when requestFullscreen is unsupported (e.g. iOS Safari)', async () => {
+      // @ts-expect-error -- deliberately removing the method to simulate an unsupported browser
+      delete Element.prototype.requestFullscreen
+
+      render(<Player episode={episode} segments={segments} episodes={episodes} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Fullscreen' }))
+
+      // The video still goes full-viewport (no native confirmation needed for that), but since
+      // there's no browser-level Esc-to-exit, our own exit control has to appear instead.
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Fullscreen' })).not.toBeInTheDocument())
+      expect(screen.getByRole('button', { name: 'Exit fullscreen' })).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Exit fullscreen' }))
+
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Fullscreen' })).toBeInTheDocument())
+    })
   })
 
   describe('Playlist sidebar and auto-advance', () => {
