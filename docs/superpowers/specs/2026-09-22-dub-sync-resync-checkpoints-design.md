@@ -20,6 +20,19 @@ This spec adds **resync checkpoints**: a Cantonese/English time pair an admin ca
 - **Guarding a backward jump mid-segment**: because a checkpoint's correction can jump backward, it's possible (if a checkpoint happens to be added between the moment a segment's `cantoStart` and `cantoEnd` are captured — an unusual but possible sequence) for the computed `englishEnd` to land at or before `englishStart`. The spacebar `keyup` handler's existing "discard on `cantoEnd <= pendingStart`" guard gains a parallel check — computed `englishEnd <= englishStart` is discarded the same way, instead of saving a nonsensical segment.
 - **Persistence**: checkpoints are saved per episode in Supabase, loaded alongside segments/anchors on the admin page's initial fetch, so an interrupted marking session doesn't lose corrections already made.
 - **Managing checkpoints**: a table under the sync controls lists all of an episode's checkpoints (Cantonese time, English time), each row editable in place — number inputs save on blur via `PATCH`, mirroring `segment-table.tsx`'s existing pattern exactly — plus a Delete button per row. Unlike segment rows' generic "Failed to save — try again", a checkpoint save failure shows the server's specific validation message, since the error here is actionable (nudge the value and retry) rather than transient.
+- **Hover explanations**: this page now has enough buttons (content-anchor marking, refine, captions, sync playback, and now checkpoints) that what each one does isn't self-evident at a glance. Every button on the admin page — existing ones included, not just the checkpoint UI added here — gets a plain HTML `title` attribute with a one-sentence explanation, relying on the browser's built-in hover tooltip. No new component or dependency; a representative sample (exact wording finalized during implementation):
+
+  | Button | `title` |
+  |---|---|
+  | Mark content start/end | "Set this video's content start/end to the current playback position" |
+  | Refine precision | "Auto-suggest a frame-accurate correction to the English anchors using video similarity" |
+  | Generate from captions | "Create segments automatically from this video's caption timing" |
+  | Play synced / Pause synced | "Play both videos together, auto-correcting English position to stay in sync" / "Pause both videos" |
+  | Go to content start | "Jump both videos to their marked content start and begin synced playback" |
+  | Resync checkpoint | "Pause and manually correct the English position to fix drift from here onward" |
+  | Nudge ±0.5s / ±0.1s | "Shift the English video back/forward by 0.5s" / "...by 0.1s" |
+  | Confirm / Cancel (checkpoint) | "Save this correction as a resync checkpoint" / "Discard without saving" |
+  | Segment/checkpoint row Delete | "Delete this segment" / "Delete this checkpoint" |
 
 ## Data Model
 
@@ -178,6 +191,7 @@ Every existing `englishTimeFor` call site threads the relevant episode's checkpo
 - The "Resync checkpoint" button and the adjustment panel (nudge buttons, preview Play/Pause, Confirm/Cancel, inline error) render in the sync-controls area described in Decisions; the panel replaces the "Hold SPACE..." instruction line while `adjustingCheckpoint` is true.
 - Every `englishTimeFor` call in this file passes `checkpointsByEpisode[episode.id] ?? []` as the third argument. The spacebar `keyup` handler's segment-creation branch adds the `englishEnd <= englishStart` discard described in Decisions, alongside its existing `cantoEnd <= pendingStart` check.
 - New `CheckpointTable` component (new file `src/app/dub-sync/admin/checkpoint-table.tsx`, structured like `segment-table.tsx`: a table + per-row component with editable `cantoTime`/`englishTime` number inputs saving on blur via `PATCH`, and a Delete button) renders unconditionally near the sync controls, above `SegmentTable`.
+- Every existing button in `admin.tsx` and `segment-table.tsx`, plus every new one added here, gets a `title` attribute per the Hover Explanations decision above.
 
 `src/app/dub-sync/admin/page.tsx`: adds a `listResyncCheckpoints` loop building `checkpointsByEpisode`, passed to `Admin` alongside `segmentsByEpisode`.
 
