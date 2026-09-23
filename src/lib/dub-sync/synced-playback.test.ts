@@ -20,8 +20,8 @@ describe('computeResyncTarget', () => {
   })
 
   it('uses a custom threshold when given one', () => {
-    expect(computeResyncTarget(60, 121, anchors, 0.5)).toBe(120)
-    expect(computeResyncTarget(60, 120.4, anchors, 0.5)).toBeNull()
+    expect(computeResyncTarget(60, 121, anchors, [], 0.5)).toBe(120)
+    expect(computeResyncTarget(60, 120.4, anchors, [], 0.5)).toBeNull()
   })
 
   it('returns null instead of throwing when the anchors are momentarily out of order', () => {
@@ -29,5 +29,12 @@ describe('computeResyncTarget', () => {
     // on a timer during synced playback, so it must never throw into an unhandled interval tick.
     const invertedAnchors: EpisodeAnchors = { ...anchors, cantoContentEnd: 5 }
     expect(computeResyncTarget(60, 120, invertedAnchors)).toBeNull()
+  })
+
+  it('resolves against the checkpoint-shifted mapping when checkpoints are given', () => {
+    // base(60) = 120; checkpoint says it should be 100 there (shift -20).
+    const checkpoints = [{ cantoTime: 60, englishTime: 100 }]
+    expect(computeResyncTarget(60, 100.3, anchors, checkpoints)).toBeNull()
+    expect(computeResyncTarget(60, 120, anchors, checkpoints)).toBe(100)
   })
 })

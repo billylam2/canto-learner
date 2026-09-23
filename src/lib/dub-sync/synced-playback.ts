@@ -1,4 +1,4 @@
-import type { EpisodeAnchors } from './normalize'
+import type { EpisodeAnchors, ResyncCheckpoint } from './normalize'
 import { englishTimeFor } from './normalize'
 
 const DEFAULT_THRESHOLD_SECONDS = 0.75
@@ -7,6 +7,7 @@ export function computeResyncTarget(
   cantoTime: number,
   englishCurrentTime: number,
   anchors: EpisodeAnchors,
+  checkpoints: ResyncCheckpoint[] = [],
   thresholdSeconds: number = DEFAULT_THRESHOLD_SECONDS
 ): number | null {
   // This runs on a timer during synced playback, so a momentarily-invalid anchor span (e.g.
@@ -14,7 +15,7 @@ export function computeResyncTarget(
   // into an unhandled interval tick — just skip resyncing until the anchors are valid again.
   let target: number
   try {
-    target = englishTimeFor(cantoTime, anchors)
+    target = englishTimeFor(cantoTime, anchors, checkpoints)
   } catch {
     return null
   }
