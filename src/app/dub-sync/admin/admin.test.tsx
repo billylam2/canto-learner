@@ -768,6 +768,27 @@ describe('Admin spacebar marking', () => {
     )
   })
 
+  it('prevents the browser default on every repeated keydown while Space is held', () => {
+    // Regression test: only the first (non-repeat) keydown was calling preventDefault, so the
+    // browser's own default action for Space (scroll the page down) fired on every OS
+    // auto-repeat event during a long hold, walking the page to the bottom before release.
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 20)
+    const englishHandle = makeHandle(() => 0)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+
+    const firstPressNotPrevented = fireEvent.keyDown(window, { code: 'Space' })
+    const repeatNotPrevented = fireEvent.keyDown(window, { code: 'Space', repeat: true })
+
+    // fireEvent's return value is the raw dispatchEvent() result: false means some handler
+    // called preventDefault().
+    expect(firstPressNotPrevented).toBe(false)
+    expect(repeatNotPrevented).toBe(false)
+  })
+
   it('does nothing when synced playback is not running', () => {
     const refs = captureRefs()
     const cantoHandle = makeHandle(() => 20)

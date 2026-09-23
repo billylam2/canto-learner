@@ -338,8 +338,13 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
     const episodeId = episode.id
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.code !== 'Space' || event.repeat) return
+      if (event.code !== 'Space') return
+      // Must run on every repeat too, not just the first press: the browser's own default for
+      // Space (scroll the page down, like Page Down) re-fires on each OS key-repeat event while
+      // the key stays held — which is exactly what was walking the page to the bottom during a
+      // long hold. Only the marking logic itself skips repeats, below.
       event.preventDefault()
+      if (event.repeat) return
       const cantoTime = cantoPlayerRef.current?.getCurrentTime() ?? 0
       const floor =
         nextSegmentStartFloorRef.current[episodeId] ??
