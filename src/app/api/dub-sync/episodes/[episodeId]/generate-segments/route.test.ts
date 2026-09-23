@@ -9,6 +9,7 @@ vi.mock('@/lib/supabase/client', () => ({
 vi.mock('@/lib/db/dub-sync', () => ({
   getEpisode: vi.fn(),
   createSegmentsBulk: vi.fn(),
+  listResyncCheckpoints: vi.fn(),
 }))
 
 vi.mock('@/lib/dub-sync/captions', () => ({
@@ -16,7 +17,7 @@ vi.mock('@/lib/dub-sync/captions', () => ({
 }))
 
 import { POST } from './route'
-import { getEpisode, createSegmentsBulk } from '@/lib/db/dub-sync'
+import { getEpisode, createSegmentsBulk, listResyncCheckpoints } from '@/lib/db/dub-sync'
 import { fetchCantoneseCaptionCues } from '@/lib/dub-sync/captions'
 
 const episodeWithAnchors = {
@@ -48,6 +49,7 @@ describe('POST /api/dub-sync/episodes/[episodeId]/generate-segments', () => {
 
   it('generates and bulk-creates candidate segments from captions', async () => {
     vi.mocked(getEpisode).mockResolvedValue(episodeWithAnchors)
+    vi.mocked(listResyncCheckpoints).mockResolvedValue([])
     vi.mocked(fetchCantoneseCaptionCues).mockResolvedValue([{ start: 10, end: 20, text: '你好' }])
     vi.mocked(createSegmentsBulk).mockResolvedValue([
       {

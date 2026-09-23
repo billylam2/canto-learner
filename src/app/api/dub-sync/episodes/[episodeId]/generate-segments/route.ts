@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/client'
-import { getEpisode, createSegmentsBulk } from '@/lib/db/dub-sync'
+import { getEpisode, createSegmentsBulk, listResyncCheckpoints } from '@/lib/db/dub-sync'
 import { fetchCantoneseCaptionCues } from '@/lib/dub-sync/captions'
 import { cuesToCandidateSegments } from '@/lib/dub-sync/candidate-segments'
 import type { EpisodeAnchors } from '@/lib/dub-sync/normalize'
@@ -39,6 +39,8 @@ export async function POST(
     englishContentEnd: episode.englishContentEnd,
   }
 
+  const checkpoints = await listResyncCheckpoints(supabase, episodeId)
+
   let cues
   try {
     cues = await fetchCantoneseCaptionCues(episode.cantoneseVideoId)
@@ -46,7 +48,7 @@ export async function POST(
     return NextResponse.json({ error: `Failed to fetch captions: ${(error as Error).message}` }, { status: 502 })
   }
 
-  const candidates = cuesToCandidateSegments(cues, anchors)
+  const candidates = cuesToCandidateSegments(cues, anchors, checkpoints)
   const segments = await createSegmentsBulk(supabase, episodeId, candidates)
   return NextResponse.json({ segments }, { status: 201 })
 }

@@ -1,4 +1,4 @@
-import type { EpisodeAnchors } from './normalize'
+import type { EpisodeAnchors, ResyncCheckpoint } from './normalize'
 import { englishTimeFor } from './normalize'
 
 export interface TimedCue {
@@ -13,13 +13,17 @@ export interface CandidateSegment {
   englishEnd: number
 }
 
-export function cuesToCandidateSegments(cues: TimedCue[], anchors: EpisodeAnchors): CandidateSegment[] {
+export function cuesToCandidateSegments(
+  cues: TimedCue[],
+  anchors: EpisodeAnchors,
+  checkpoints: ResyncCheckpoint[] = []
+): CandidateSegment[] {
   return cues
     .filter((cue) => cue.start >= anchors.cantoContentStart && cue.end <= anchors.cantoContentEnd)
     .map((cue) => ({
       cantoStart: cue.start,
       cantoEnd: cue.end,
-      englishStart: englishTimeFor(cue.start, anchors),
-      englishEnd: englishTimeFor(cue.end, anchors),
+      englishStart: englishTimeFor(cue.start, anchors, checkpoints),
+      englishEnd: englishTimeFor(cue.end, anchors, checkpoints),
     }))
 }
