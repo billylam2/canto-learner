@@ -2,17 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { YoutubePlayer, type YoutubePlayerHandle } from '@/components/dub-sync/youtube-player'
-import type { DubEpisode, DubSegment } from '@/lib/db/dub-sync'
-import { englishTimeFor, type EpisodeAnchors } from '@/lib/dub-sync/normalize'
+import type { DubEpisode, DubSegment, DubResyncCheckpoint } from '@/lib/db/dub-sync'
+import { englishTimeFor, type EpisodeAnchors, type ResyncCheckpoint } from '@/lib/dub-sync/normalize'
 import { computeResyncTarget } from '@/lib/dub-sync/synced-playback'
 import { SegmentPlaybackController } from '@/lib/dub-sync/player-controller'
 import { NewEpisodeForm } from './new-episode-form'
 import { SegmentTable } from './segment-table'
+import { CheckpointTable } from './checkpoint-table'
 import { AnchorFields } from './anchor-fields'
 
 interface AdminProps {
   episodes: DubEpisode[]
   segmentsByEpisode: Record<string, DubSegment[]>
+  checkpointsByEpisode?: Record<string, DubResyncCheckpoint[]>
 }
 
 function hasAllAnchors(episode: DubEpisode): episode is DubEpisode & EpisodeAnchors {
@@ -24,9 +26,14 @@ function hasAllAnchors(episode: DubEpisode): episode is DubEpisode & EpisodeAnch
   )
 }
 
-export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSegments }: AdminProps) {
+export function Admin({
+  episodes: initialEpisodes,
+  segmentsByEpisode: initialSegments,
+  checkpointsByEpisode: initialCheckpoints = {},
+}: AdminProps) {
   const [episodes, setEpisodes] = useState(initialEpisodes)
   const [segmentsByEpisode, setSegmentsByEpisode] = useState(initialSegments)
+  const [checkpointsByEpisode, setCheckpointsByEpisode] = useState(initialCheckpoints)
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(initialEpisodes[0]?.id ?? null)
 
   const cantoPlayerRef = useRef<YoutubePlayerHandle>(null)
@@ -43,6 +50,10 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
   const segments = useMemo(
     () => (selectedEpisodeId ? (segmentsByEpisode[selectedEpisodeId] ?? []) : []),
     [selectedEpisodeId, segmentsByEpisode]
+  )
+  const checkpoints: ResyncCheckpoint[] = useMemo(
+    () => (selectedEpisodeId ? (checkpointsByEpisode[selectedEpisodeId] ?? []) : []),
+    [selectedEpisodeId, checkpointsByEpisode]
   )
 
   function selectEpisode(id: string) {
@@ -247,6 +258,22 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
     delete nextSegmentStartFloorRef.current[selectedEpisodeId]
   }
 
+  function handleCheckpointUpdated(updated: DubResyncCheckpoint) {
+    if (!selectedEpisodeId) return
+    setCheckpointsByEpisode((current) => ({
+      ...current,
+      [selectedEpisodeId]: current[selectedEpisodeId].map((c) => (c.id === updated.id ? updated : c)),
+    }))
+  }
+
+  function handleCheckpointDeleted(checkpointId: string) {
+    if (!selectedEpisodeId) return
+    setCheckpointsByEpisode((current) => ({
+      ...current,
+      [selectedEpisodeId]: current[selectedEpisodeId].filter((c) => c.id !== checkpointId),
+    }))
+  }
+
   const [syncing, setSyncing] = useState(false)
 
   // 1.25x makes marking sessions faster to get through without making the dialogue hard to
@@ -288,6 +315,64 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
     setSyncing(false)
   }
 
+  const [adjustingCheckpoint, setAdjustingCheckpoint] = useState(false)
+  const [checkpointError, setCheckpointError] = useState<string | null>(null)
+
+  // Reuses stopSyncedPlayback so entering adjustment gets the same pause + 1x-rate-reset +
+  // `syncing: false` behavior for free — which, since both the resync interval and the spacebar
+  // listener are already gated on `syncing`, also suspends them without any extra guard here.
+  function enterCheckpointAdjustment() {
+    if (!syncing) return
+    stopSyncedPlayback()
+    setCheckpointError(null)
+    setAdjustingCheckpoint(true)
+  }
+
+  function nudgeEnglish(deltaSeconds: number) {
+    const player = englishPlayerRef.current
+    if (!player) return
+    player.seekTo(player.getCurrentTime() + deltaSeconds, true)
+  }
+
+  function previewPlay() {
+    cantoPlayerRef.current?.playVideo()
+    englishPlayerRef.current?.playVideo()
+  }
+
+  function previewPause() {
+    cantoPlayerRef.current?.pauseVideo()
+    englishPlayerRef.current?.pauseVideo()
+  }
+
+  async function confirmCheckpoint() {
+    if (!episode) return
+    const cantoTime = cantoPlayerRef.current?.getCurrentTime() ?? 0
+    const englishTime = englishPlayerRef.current?.getCurrentTime() ?? 0
+    const response = await fetch(`/api/dub-sync/episodes/${episode.id}/checkpoints`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cantoTime, englishTime }),
+    })
+    const body = await response.json()
+    if (!response.ok) {
+      setCheckpointError(body.error ?? 'Failed to save checkpoint')
+      return
+    }
+    setCheckpointError(null)
+    setCheckpointsByEpisode((current) => ({
+      ...current,
+      [episode.id]: [...(current[episode.id] ?? []), body.checkpoint].sort(
+        (a: ResyncCheckpoint, b: ResyncCheckpoint) => a.cantoTime - b.cantoTime
+      ),
+    }))
+    setAdjustingCheckpoint(false)
+  }
+
+  function cancelCheckpointAdjustment() {
+    setAdjustingCheckpoint(false)
+    setCheckpointError(null)
+  }
+
   function goToContentStart() {
     if (!episode || !anchorsSet) return
     const anchors = episode as DubEpisode & EpisodeAnchors
@@ -318,11 +403,11 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
     const interval = setInterval(() => {
       const cantoTime = cantoPlayerRef.current?.getCurrentTime() ?? 0
       const englishTime = englishPlayerRef.current?.getCurrentTime() ?? 0
-      const target = computeResyncTarget(cantoTime, englishTime, anchors)
+      const target = computeResyncTarget(cantoTime, englishTime, anchors, checkpoints)
       if (target !== null) englishPlayerRef.current?.seekTo(target, true)
     }, 1000)
     return () => clearInterval(interval)
-  }, [syncing, episode, anchorsSet])
+  }, [syncing, episode, anchorsSet, checkpoints])
 
   // Space bar is the marking key while synced playback is running: hold it down for as long as a
   // character/narrator is speaking, release when they stop. The segment's end is the release
@@ -361,8 +446,9 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
       const cantoEnd = cantoPlayerRef.current?.getCurrentTime() ?? 0
       if (cantoEnd <= cantoStart) return
 
-      const englishStart = englishTimeFor(cantoStart, anchors)
-      const englishEnd = englishTimeFor(cantoEnd, anchors)
+      const englishStart = englishTimeFor(cantoStart, anchors, checkpoints)
+      const englishEnd = englishTimeFor(cantoEnd, anchors, checkpoints)
+      if (englishEnd <= englishStart) return
       nextSegmentStartFloorRef.current[episodeId] = cantoEnd
 
       const response = await fetch(`/api/dub-sync/episodes/${episodeId}/segments`, {
@@ -393,7 +479,7 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [syncing, episode, anchorsSet, segments])
+  }, [syncing, episode, anchorsSet, segments, checkpoints])
 
   const [captionsError, setCaptionsError] = useState<string | null>(null)
 
@@ -536,16 +622,95 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
                 onClick={() => (syncing ? stopSyncedPlayback() : startSyncedPlayback())}
                 disabled={!anchorsSet}
                 className="border p-2 rounded"
+                title="Play both videos together, auto-correcting English position to stay in sync"
               >
                 {syncing ? 'Pause synced' : 'Play synced'}
               </button>
-              <button onClick={goToContentStart} disabled={!anchorsSet} className="border p-2 rounded">
+              <button
+                onClick={goToContentStart}
+                disabled={!anchorsSet}
+                className="border p-2 rounded"
+                title="Jump both videos to their marked content start and begin synced playback"
+              >
                 Go to content start
+              </button>
+              <button
+                onClick={enterCheckpointAdjustment}
+                disabled={!syncing}
+                className="border p-2 rounded"
+                title="Pause and manually correct the English position to fix drift from here onward"
+              >
+                Resync checkpoint
               </button>
             </div>
 
-            {syncing && (
+            {syncing && !adjustingCheckpoint && (
               <p className="text-gray-500 mb-4">Hold SPACE while a character is speaking, release when they stop.</p>
+            )}
+
+            {adjustingCheckpoint && (
+              <div className="border p-2 rounded mb-4 flex flex-col gap-2">
+                <p className="text-gray-500">Nudge the English video to match, then confirm.</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => nudgeEnglish(-0.5)}
+                    className="border p-1 rounded"
+                    title="Shift the English video back by 0.5s"
+                  >
+                    -0.5s
+                  </button>
+                  <button
+                    onClick={() => nudgeEnglish(-0.1)}
+                    className="border p-1 rounded"
+                    title="Shift the English video back by 0.1s"
+                  >
+                    -0.1s
+                  </button>
+                  <button
+                    onClick={() => nudgeEnglish(0.1)}
+                    className="border p-1 rounded"
+                    title="Shift the English video forward by 0.1s"
+                  >
+                    +0.1s
+                  </button>
+                  <button
+                    onClick={() => nudgeEnglish(0.5)}
+                    className="border p-1 rounded"
+                    title="Shift the English video forward by 0.5s"
+                  >
+                    +0.5s
+                  </button>
+                  <button
+                    onClick={previewPlay}
+                    className="border p-1 rounded"
+                    title="Play both videos from their current position to check alignment"
+                  >
+                    Preview play
+                  </button>
+                  <button onClick={previewPause} className="border p-1 rounded" title="Pause both videos">
+                    Preview pause
+                  </button>
+                  <button
+                    onClick={confirmCheckpoint}
+                    className="border p-1 rounded"
+                    title="Save this correction as a resync checkpoint"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    onClick={cancelCheckpointAdjustment}
+                    className="border p-1 rounded"
+                    title="Discard this correction without saving"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {checkpointError && (
+                  <p role="alert" className="text-red-600">
+                    {checkpointError}
+                  </p>
+                )}
+              </div>
             )}
 
             {captionsError && (
@@ -553,6 +718,13 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
                 {captionsError}
               </p>
             )}
+
+            <CheckpointTable
+              episodeId={episode.id}
+              checkpoints={checkpointsByEpisode[episode.id] ?? []}
+              onUpdate={handleCheckpointUpdated}
+              onDelete={handleCheckpointDeleted}
+            />
 
             <SegmentTable
               episodeId={episode.id}

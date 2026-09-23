@@ -508,6 +508,144 @@ describe('Admin synced playback', () => {
   })
 })
 
+describe('Admin resync checkpoints', () => {
+  const episodeWithAnchors = {
+    ...episodeA,
+    cantoContentStart: 10,
+    cantoContentEnd: 110,
+    englishContentStart: 20,
+    englishContentEnd: 220,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  it('disables the Resync checkpoint button until synced playback is running', () => {
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    expect(screen.getByRole('button', { name: 'Resync checkpoint' })).toBeDisabled()
+  })
+
+  it('entering adjustment mode pauses both players and shows the adjustment panel', () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 60)
+    const englishHandle = makeHandle(() => 130)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resync checkpoint' }))
+
+    expect(cantoHandle.pauseVideo).toHaveBeenCalled()
+    expect(englishHandle.pauseVideo).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument()
+    expect(screen.queryByText(/Hold SPACE/)).not.toBeInTheDocument()
+  })
+
+  it("nudge buttons shift only the English player's current time by the expected delta", () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 60)
+    const englishHandle = makeHandle(() => 130)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Resync checkpoint' }))
+
+    fireEvent.click(screen.getByRole('button', { name: '+0.5s' }))
+    expect(englishHandle.seekTo).toHaveBeenCalledWith(130.5, true)
+
+    fireEvent.click(screen.getByRole('button', { name: '-0.1s' }))
+    expect(englishHandle.seekTo).toHaveBeenCalledWith(129.9, true)
+  })
+
+  it('Preview play/pause act on both players', () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 60)
+    const englishHandle = makeHandle(() => 130)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Resync checkpoint' }))
+    vi.clearAllMocks()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview play' }))
+    expect(cantoHandle.playVideo).toHaveBeenCalled()
+    expect(englishHandle.playVideo).toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview pause' }))
+    expect(cantoHandle.pauseVideo).toHaveBeenCalled()
+    expect(englishHandle.pauseVideo).toHaveBeenCalled()
+  })
+
+  it('Confirm posts the checkpoint, adds it to the table, and returns to the paused state', async () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 60)
+    const englishHandle = makeHandle(() => 100)
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ checkpoint: { id: 'chk-1', episodeId: 'ep-a', cantoTime: 60, englishTime: 100 } }),
+    } as Response)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Resync checkpoint' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a/checkpoints',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ cantoTime: 60, englishTime: 100 }) })
+      )
+    )
+    await waitFor(() => expect(screen.getByDisplayValue('60')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Play synced' })).toBeInTheDocument()
+  })
+
+  it('keeps the panel open and shows the server error when Confirm fails', async () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 60)
+    const englishHandle = makeHandle(() => 100)
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      json: () => Promise.resolve({ error: 'Checkpoint must fall within the marked content' }),
+    } as Response)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Resync checkpoint' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Checkpoint must fall within the marked content')
+    )
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument()
+  })
+
+  it('Cancel discards adjustment mode without a request', () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 60)
+    const englishHandle = makeHandle(() => 100)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Resync checkpoint' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(fetch).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Play synced' })).toBeInTheDocument()
+  })
+})
+
 describe('Admin play segment from the segment table', () => {
   const episodeWithAnchors = {
     ...episodeA,
@@ -720,6 +858,35 @@ describe('Admin spacebar marking', () => {
     // pressed at 5, -0.5 = 4.5, but the floor (content start) clamps pendingStart to 10
     fireEvent.keyDown(window, { code: 'Space' })
     cantoTime = 8 // released before the clamped start (10)
+    fireEvent.keyUp(window, { code: 'Space' })
+
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('discards the press when a checkpoint jump would make englishEnd <= englishStart', () => {
+    const refs = captureRefs()
+    const cantoTime = 16
+    const cantoHandle = makeHandle(() => cantoTime)
+    const englishHandle = makeHandle(() => 0)
+    // Pressing and releasing at 16 gives pendingStart = 15 (the existing -1s offset). Checkpoint
+    // 1 (at 15) shifts englishStart forward to 100; checkpoint 2 (at 16) shifts englishEnd back
+    // down to 20 — a straddled backward jump that must discard rather than save cantoEnd < cantoStart.
+    const checkpoints = [
+      { id: 'chk-1', episodeId: 'ep-a', cantoTime: 15, englishTime: 100 },
+      { id: 'chk-2', episodeId: 'ep-a', cantoTime: 16, englishTime: 20 },
+    ]
+
+    render(
+      <Admin
+        episodes={[episodeWithAnchors]}
+        segmentsByEpisode={{ 'ep-a': [] }}
+        checkpointsByEpisode={{ 'ep-a': checkpoints }}
+      />
+    )
+    refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+
+    fireEvent.keyDown(window, { code: 'Space' })
     fireEvent.keyUp(window, { code: 'Space' })
 
     expect(fetch).not.toHaveBeenCalled()
