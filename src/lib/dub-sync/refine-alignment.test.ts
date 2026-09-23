@@ -145,6 +145,56 @@ describe('refineAlignment', () => {
     )
   })
 
+  it('retries at a dynamic reference point when both narrow and wide searches are unconfident', async () => {
+    const shared = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    const allZero = 0n
+    const allOnes = (1n << 64n) - 1n
+
+    const extractClipHashes = vi.fn(
+      async ({ videoId, centerSeconds }: { videoId: string; centerSeconds: number }) => {
+        // Anchor (centerSeconds 20/18): no signal at either window size.
+        if (centerSeconds === 20 || centerSeconds === 18) {
+          return videoId === 'canto-1' ? [allZero, allZero, allZero, allZero] : [allOnes, allOnes, allOnes, allOnes]
+        }
+        // Dynamic reference point (anchor + 15s): a clear, confident match shifted 0.5s later.
+        if (videoId === 'canto-1') return hashes(shared.slice(0, 10))
+        return hashes([0, 0, 0, 0, 0, ...shared.slice(0, 10)])
+      }
+    )
+
+    const result = await refineAlignment(
+      { cantoneseVideoId: 'canto-1', englishVideoId: 'english-1', cantoTime: 20, englishTime: 18 },
+      { extractClipHashes },
+      { dynamicReferenceOffsetSeconds: 15 }
+    )
+
+    expect(extractClipHashes).toHaveBeenCalledWith(
+      expect.objectContaining({ videoId: 'canto-1', centerSeconds: 35, windowSeconds: REFINE_ALIGNMENT_WINDOW_SECONDS })
+    )
+    expect(extractClipHashes).toHaveBeenCalledWith(
+      expect.objectContaining({ videoId: 'english-1', centerSeconds: 33, windowSeconds: REFINE_ALIGNMENT_WINDOW_SECONDS })
+    )
+    // The offset found at the shifted reference point still applies to the original anchor.
+    expect(result.offsetSeconds).toBeCloseTo(0.5, 5)
+    expect(result.suggestedEnglishTime).toBeCloseTo(18.5, 5)
+    expect(result.confident).toBe(true)
+  })
+
+  it('does not retry at a dynamic reference point when the option is omitted', async () => {
+    const allZero = 0n
+    const allOnes = (1n << 64n) - 1n
+    const extractClipHashes = vi.fn(async ({ videoId }: { videoId: string }) =>
+      videoId === 'canto-1' ? [allZero, allZero, allZero, allZero] : [allOnes, allOnes, allOnes, allOnes]
+    )
+
+    await refineAlignment(
+      { cantoneseVideoId: 'canto-1', englishVideoId: 'english-1', cantoTime: 20, englishTime: 18 },
+      { extractClipHashes }
+    )
+
+    expect(extractClipHashes).not.toHaveBeenCalledWith(expect.objectContaining({ centerSeconds: 35 }))
+  })
+
   it('propagates a clip-extraction failure (e.g. the download failed)', async () => {
     const extractClipHashes = vi.fn(async () => {
       throw new Error('yt-dlp exited with code 1')

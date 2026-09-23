@@ -78,7 +78,8 @@ describe('POST /api/dub-sync/episodes/[episodeId]/refine-alignment', () => {
         cantoTime: 15.7394,
         englishTime: 14.7089,
       },
-      expect.objectContaining({ extractClipHashes: expect.any(Function) })
+      expect.objectContaining({ extractClipHashes: expect.any(Function) }),
+      { dynamicReferenceOffsetSeconds: 15 }
     )
     expect(refineAlignment).toHaveBeenCalledWith(
       {

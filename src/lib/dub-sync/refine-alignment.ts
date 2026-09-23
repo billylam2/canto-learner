@@ -48,6 +48,19 @@ export interface RefineAlignmentDeps {
   extractClipHashes: (options: ExtractClipHashesOptions) => Promise<FrameHash[]>
 }
 
+export interface RefineAlignmentOptions {
+  // Last-resort fallback when even the wider window is unconfident: retry once more sampling
+  // from a reference point this many seconds away from the anchor (same shift applied to both
+  // videos), rather than at the anchor itself. Useful when the anchor sits in a low-motion or
+  // visually ambiguous patch (e.g. a content-start mark right at a fairly static establishing
+  // shot) that no amount of extra window width fixes, because there just isn't much distinctive
+  // motion there to correlate against. The offset discovered at the reference point is still
+  // valid for the original anchor — the relative timing between the two dubs should stay stable
+  // across a short local span like this. Omit to skip this fallback entirely (e.g. content-end
+  // marks, which don't tend to need it).
+  dynamicReferenceOffsetSeconds?: number
+}
+
 const MAX_OFFSET_FRAMES = Math.round(MAX_OFFSET_SECONDS * REFINE_ALIGNMENT_FPS)
 
 // When the best match found sits exactly at the edge of the search window, that's usually a
@@ -64,19 +77,24 @@ function isConfident(best: NonNullable<ReturnType<typeof findBestOffset>>): bool
 // correction to the English mark so the two line up frame-accurately.
 export async function refineAlignment(
   input: RefineAlignmentInput,
-  deps: RefineAlignmentDeps
+  deps: RefineAlignmentDeps,
+  options: RefineAlignmentOptions = {}
 ): Promise<RefineAlignmentResult> {
-  async function search(windowSeconds: number) {
+  // referenceOffsetSeconds shifts WHERE both videos are sampled from, by the same amount, for
+  // finding a better-signal reference point — it does not change what the returned offsetSeconds
+  // means. Both clips move together, so the relative timing found still applies to the original
+  // (un-shifted) anchor, exactly as if it had been measured there directly.
+  async function search(windowSeconds: number, referenceOffsetSeconds = 0) {
     const [cantoHashes, englishHashes] = await Promise.all([
       deps.extractClipHashes({
         videoId: input.cantoneseVideoId,
-        centerSeconds: input.cantoTime,
+        centerSeconds: input.cantoTime + referenceOffsetSeconds,
         windowSeconds,
         fps: REFINE_ALIGNMENT_FPS,
       }),
       deps.extractClipHashes({
         videoId: input.englishVideoId,
-        centerSeconds: input.englishTime,
+        centerSeconds: input.englishTime + referenceOffsetSeconds,
         windowSeconds,
         fps: REFINE_ALIGNMENT_FPS,
       }),
@@ -90,6 +108,11 @@ export async function refineAlignment(
   if (best === null || !isConfident(best)) {
     const wideBest = await search(WIDE_RETRY_WINDOW_SECONDS)
     if (wideBest !== null) best = wideBest
+  }
+
+  if ((best === null || !isConfident(best)) && options.dynamicReferenceOffsetSeconds !== undefined) {
+    const dynamicBest = await search(REFINE_ALIGNMENT_WINDOW_SECONDS, options.dynamicReferenceOffsetSeconds)
+    if (dynamicBest !== null) best = dynamicBest
   }
 
   if (best === null) {

@@ -37,7 +37,11 @@ export async function POST(
         cantoTime: episode.cantoContentStart,
         englishTime: episode.englishContentStart,
       },
-      { extractClipHashes }
+      { extractClipHashes },
+      // Content starts often sit right at a fairly static establishing shot, which no amount of
+      // window widening fixes — 15s in is usually well into more dynamic, easier-to-match
+      // content. Not used for content end below: that one hasn't needed it in practice.
+      { dynamicReferenceOffsetSeconds: 15 }
     )
 
     // Content end is only refined once both ends are already marked — a null end means the
