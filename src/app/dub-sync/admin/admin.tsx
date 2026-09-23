@@ -266,6 +266,11 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
 
   function startSyncedPlayback() {
     if (!episode || !anchorsSet) return
+    // Whichever button was clicked to get here (this one, or e.g. a "Mark content start/end"
+    // button clicked just before) otherwise keeps browser focus for the rest of the marking
+    // session — Space then doubles as "press this still-focused button" on top of marking,
+    // which is what was causing the page to jump around once a segment finished recording.
+    ;(document.activeElement as HTMLElement | null)?.blur?.()
     controllerRef.current?.stop()
     cantoPlayerRef.current?.setPlaybackRate?.(MARKING_PLAYBACK_RATE)
     englishPlayerRef.current?.setPlaybackRate?.(MARKING_PLAYBACK_RATE)
