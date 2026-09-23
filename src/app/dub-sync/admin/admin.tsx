@@ -538,10 +538,18 @@ export function Admin({
                   <YoutubePlayer ref={cantoPlayerRef} videoId={episode.cantoneseVideoId} elementId="canto-player" />
                 </div>
                 <div className="flex gap-2 mt-2">
-                  <button onClick={markCantoStart} className="border p-1 rounded">
+                  <button
+                    onClick={markCantoStart}
+                    className="border p-1 rounded"
+                    title="Set this video's content start to the current playback position"
+                  >
                     Mark content start
                   </button>
-                  <button onClick={markCantoEnd} className="border p-1 rounded">
+                  <button
+                    onClick={markCantoEnd}
+                    className="border p-1 rounded"
+                    title="Set this video's content end to the current playback position"
+                  >
                     Mark content end
                   </button>
                 </div>
@@ -557,10 +565,18 @@ export function Admin({
                   <YoutubePlayer ref={englishPlayerRef} videoId={episode.englishVideoId} elementId="english-player" />
                 </div>
                 <div className="flex gap-2 mt-2">
-                  <button onClick={markEnglishStart} className="border p-1 rounded">
+                  <button
+                    onClick={markEnglishStart}
+                    className="border p-1 rounded"
+                    title="Set this video's content start to the current playback position"
+                  >
                     Mark content start
                   </button>
-                  <button onClick={markEnglishEnd} className="border p-1 rounded">
+                  <button
+                    onClick={markEnglishEnd}
+                    className="border p-1 rounded"
+                    title="Set this video's content end to the current playback position"
+                  >
                     Mark content end
                   </button>
                 </div>
@@ -574,7 +590,12 @@ export function Admin({
             </div>
             {canRefineAlignment && (
               <div className="mb-4">
-                <button onClick={runRefineAlignment} disabled={refining} className="border p-2 rounded">
+                <button
+                  onClick={runRefineAlignment}
+                  disabled={refining}
+                  className="border p-2 rounded"
+                  title="Auto-suggest a frame-accurate correction to the English anchors using video similarity"
+                >
                   {refining ? 'Refining…' : 'Refine precision'}
                 </button>
                 {refineError && (
@@ -598,10 +619,18 @@ export function Admin({
                         </p>
                       )}
                     </div>
-                    <button onClick={applyRefineSuggestion} className="border p-1 rounded">
+                    <button
+                      onClick={applyRefineSuggestion}
+                      className="border p-1 rounded"
+                      title="Use the suggested English times as the new anchors"
+                    >
                       Apply
                     </button>
-                    <button onClick={() => setRefineSuggestion(null)} className="border p-1 rounded">
+                    <button
+                      onClick={() => setRefineSuggestion(null)}
+                      className="border p-1 rounded"
+                      title="Discard the suggestion without applying it"
+                    >
                       Dismiss
                     </button>
                   </div>
@@ -612,7 +641,12 @@ export function Admin({
             {!anchorsSet && <p className="text-gray-500 mb-4">Set anchors before marking segments.</p>}
 
             <div className="flex gap-2 mb-4">
-              <button onClick={runGenerateFromCaptions} disabled={!anchorsSet} className="border p-2 rounded">
+              <button
+                onClick={runGenerateFromCaptions}
+                disabled={!anchorsSet}
+                className="border p-2 rounded"
+                title="Create segments automatically from this video's caption timing"
+              >
                 Generate from captions
               </button>
             </div>

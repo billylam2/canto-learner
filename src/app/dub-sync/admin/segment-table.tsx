@@ -131,10 +131,14 @@ function SegmentRow({ episodeId, segment, onUpdate, onDelete, onPlay }: SegmentR
         />
       </td>
       <td>
-        <button onClick={() => onPlay(segment)} className="border p-1 rounded text-sm">
+        <button
+          onClick={() => onPlay(segment)}
+          className="border p-1 rounded text-sm"
+          title="Play this segment: Cantonese then English"
+        >
           Play
         </button>
-        <button onClick={handleDelete} className="border p-1 rounded text-sm">
+        <button onClick={handleDelete} className="border p-1 rounded text-sm" title="Delete this segment">
           Delete
         </button>
         {saveError && (
