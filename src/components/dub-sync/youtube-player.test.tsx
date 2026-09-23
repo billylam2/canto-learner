@@ -15,6 +15,7 @@ function makeFakePlayer() {
     playVideo: vi.fn(),
     pauseVideo: vi.fn(),
     getCurrentTime: vi.fn(() => 42),
+    setPlaybackRate: vi.fn(),
     destroy: vi.fn(),
   }
 }
@@ -59,9 +60,11 @@ describe('YoutubePlayer', () => {
     ref.current?.seekTo(10, true)
     ref.current?.playVideo()
     ref.current?.pauseVideo()
+    ref.current?.setPlaybackRate?.(1.25)
     expect(fakePlayer.seekTo).toHaveBeenCalledWith(10, true)
     expect(fakePlayer.playVideo).toHaveBeenCalled()
     expect(fakePlayer.pauseVideo).toHaveBeenCalled()
+    expect(fakePlayer.setPlaybackRate).toHaveBeenCalledWith(1.25)
     expect(ref.current?.getCurrentTime()).toBe(42)
   })
 

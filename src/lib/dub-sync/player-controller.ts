@@ -3,6 +3,7 @@ export interface YouTubePlayerLike {
   playVideo(): void
   pauseVideo(): void
   getCurrentTime(): number
+  setPlaybackRate?(rate: number): void
   destroy?(): void
 }
 

@@ -51,7 +51,7 @@ function captureRefs() {
 }
 
 function makeHandle(getCurrentTime: () => number) {
-  return { seekTo: vi.fn(), playVideo: vi.fn(), pauseVideo: vi.fn(), getCurrentTime }
+  return { seekTo: vi.fn(), playVideo: vi.fn(), pauseVideo: vi.fn(), getCurrentTime, setPlaybackRate: vi.fn() }
 }
 
 describe('Admin', () => {
@@ -191,9 +191,13 @@ describe('Admin refine alignment', () => {
       json: () =>
         Promise.resolve({
           suggestedEnglishContentStart: 14.8089,
-          offsetSeconds: 0.1,
-          avgDistance: 2.24,
-          confident: true,
+          startOffsetSeconds: 0.1,
+          startAvgDistance: 2.24,
+          startConfident: true,
+          suggestedEnglishContentEnd: null,
+          endOffsetSeconds: null,
+          endAvgDistance: null,
+          endConfident: null,
         }),
     } as Response)
 
@@ -220,9 +224,13 @@ describe('Admin refine alignment', () => {
           json: () =>
             Promise.resolve({
               suggestedEnglishContentStart: 14.8089,
-              offsetSeconds: 0.1,
-              avgDistance: 2.24,
-              confident: true,
+              startOffsetSeconds: 0.1,
+              startAvgDistance: 2.24,
+              startConfident: true,
+              suggestedEnglishContentEnd: null,
+              endOffsetSeconds: null,
+              endAvgDistance: null,
+              endConfident: null,
             }),
         } as Response)
       }
@@ -262,9 +270,13 @@ describe('Admin refine alignment', () => {
       json: () =>
         Promise.resolve({
           suggestedEnglishContentStart: 14.8089,
-          offsetSeconds: 0.1,
-          avgDistance: 2.24,
-          confident: true,
+          startOffsetSeconds: 0.1,
+          startAvgDistance: 2.24,
+          startConfident: true,
+          suggestedEnglishContentEnd: null,
+          endOffsetSeconds: null,
+          endAvgDistance: null,
+          endConfident: null,
         }),
     } as Response)
 
@@ -286,6 +298,59 @@ describe('Admin refine alignment', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Refine precision' }))
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('yt-dlp exited with code 1'))
+  })
+
+  it('also applies a suggested content end when the response includes one', async () => {
+    const episodeWithBothAnchors = {
+      ...episodeWithBothStarts,
+      cantoContentEnd: 286.273,
+      englishContentEnd: 285.344,
+    }
+    vi.mocked(fetch).mockImplementation((url: unknown) => {
+      const u = String(url)
+      if (u.includes('refine-alignment')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              suggestedEnglishContentStart: 14.8089,
+              startOffsetSeconds: 0.1,
+              startAvgDistance: 2.24,
+              startConfident: true,
+              suggestedEnglishContentEnd: 285.5,
+              endOffsetSeconds: 0.156,
+              endAvgDistance: 3.1,
+              endConfident: true,
+            }),
+        } as Response)
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ episode: episodeWithBothAnchors }),
+      } as Response)
+    })
+
+    render(<Admin episodes={[episodeWithBothAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Refine precision' }))
+
+    expect(await screen.findByText(/Suggested English end: 285\.50/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({
+            cantoContentStart: 15.7394,
+            cantoContentEnd: 286.273,
+            englishContentStart: 14.8089,
+            englishContentEnd: 285.5,
+          }),
+        })
+      )
+    )
   })
 })
 
@@ -373,7 +438,21 @@ describe('Admin synced playback', () => {
     expect(screen.getByRole('button', { name: 'Pause synced' })).toBeInTheDocument()
   })
 
-  it('pauses both videos when stopping synced playback', () => {
+  it('speeds both videos up to 1.25x when starting synced playback', () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 0)
+    const englishHandle = makeHandle(() => 0)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    refs.assign(cantoHandle, englishHandle)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+
+    expect(cantoHandle.setPlaybackRate).toHaveBeenCalledWith(1.25)
+    expect(englishHandle.setPlaybackRate).toHaveBeenCalledWith(1.25)
+  })
+
+  it('pauses both videos when stopping synced playback, and resets the playback rate', () => {
     const refs = captureRefs()
     const cantoHandle = makeHandle(() => 0)
     const englishHandle = makeHandle(() => 0)
@@ -386,6 +465,8 @@ describe('Admin synced playback', () => {
 
     expect(cantoHandle.pauseVideo).toHaveBeenCalled()
     expect(englishHandle.pauseVideo).toHaveBeenCalled()
+    expect(cantoHandle.setPlaybackRate).toHaveBeenCalledWith(1)
+    expect(englishHandle.setPlaybackRate).toHaveBeenCalledWith(1)
     expect(screen.getByRole('button', { name: 'Play synced' })).toBeInTheDocument()
   })
 
@@ -534,7 +615,7 @@ describe('Admin spacebar marking', () => {
     vi.stubGlobal('fetch', vi.fn())
   })
 
-  it('creates a segment from a press-and-release cycle, offsetting the start by 0.5s', async () => {
+  it('creates a segment from a press-and-release cycle, offsetting the start by 1s', async () => {
     const refs = captureRefs()
     let cantoTime = 20
     const cantoHandle = makeHandle(() => cantoTime)
@@ -548,9 +629,9 @@ describe('Admin spacebar marking', () => {
             episodeId: 'ep-a',
             position: 0,
             label: null,
-            cantoStart: 19.5,
+            cantoStart: 19,
             cantoEnd: 30,
-            englishStart: 39,
+            englishStart: 38,
             englishEnd: 60,
           },
         }),
@@ -569,15 +650,15 @@ describe('Admin spacebar marking', () => {
         '/api/dub-sync/episodes/ep-a/segments',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ cantoStart: 19.5, cantoEnd: 30, englishStart: 39, englishEnd: 60 }),
+          body: JSON.stringify({ cantoStart: 19, cantoEnd: 30, englishStart: 38, englishEnd: 60 }),
         })
       )
     )
   })
 
-  it('clamps the start to the previous segment end when the 0.5s offset would overlap it', async () => {
+  it('clamps the start to the previous segment end when the 1s offset would overlap it', async () => {
     const refs = captureRefs()
-    let cantoTime = 35.2
+    let cantoTime = 35.5
     const cantoHandle = makeHandle(() => cantoTime)
     const englishHandle = makeHandle(() => 0)
     vi.mocked(fetch).mockResolvedValue({
@@ -610,8 +691,8 @@ describe('Admin spacebar marking', () => {
     refs.assign(cantoHandle, englishHandle)
     fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
 
-    // Pressed at 35.2, so an unclamped -0.5s offset would be 34.7 — before the previous
-    // segment's end (35). The clamp must keep the start at 35, not 34.7.
+    // Pressed at 35.5, so an unclamped -1s offset would be 34.5 — before the previous
+    // segment's end (35). The clamp must keep the start at 35, not 34.5.
     fireEvent.keyDown(window, { code: 'Space' })
     cantoTime = 45
     fireEvent.keyUp(window, { code: 'Space' })
@@ -659,9 +740,9 @@ describe('Admin spacebar marking', () => {
             episodeId: 'ep-a',
             position: 0,
             label: null,
-            cantoStart: 19.5,
+            cantoStart: 19,
             cantoEnd: 30,
-            englishStart: 39,
+            englishStart: 38,
             englishEnd: 60,
           },
         }),
@@ -671,7 +752,7 @@ describe('Admin spacebar marking', () => {
     refs.assign(cantoHandle, englishHandle)
     fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
 
-    fireEvent.keyDown(window, { code: 'Space' }) // real press at 20 -> pendingStart 19.5
+    fireEvent.keyDown(window, { code: 'Space' }) // real press at 20 -> pendingStart 19
     cantoTime = 25
     // OS auto-repeat while the key stays held must be ignored, not recompute pendingStart from 25
     fireEvent.keyDown(window, { code: 'Space', repeat: true })
@@ -682,7 +763,7 @@ describe('Admin spacebar marking', () => {
       expect(fetch).toHaveBeenCalledWith(
         '/api/dub-sync/episodes/ep-a/segments',
         expect.objectContaining({
-          body: JSON.stringify({ cantoStart: 19.5, cantoEnd: 30, englishStart: 39, englishEnd: 60 }),
+          body: JSON.stringify({ cantoStart: 19, cantoEnd: 30, englishStart: 38, englishEnd: 60 }),
         })
       )
     )

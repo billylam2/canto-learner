@@ -189,9 +189,13 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
 
   interface RefineSuggestion {
     suggestedEnglishContentStart: number
-    offsetSeconds: number
-    avgDistance: number
-    confident: boolean
+    startOffsetSeconds: number
+    startAvgDistance: number
+    startConfident: boolean
+    suggestedEnglishContentEnd: number | null
+    endOffsetSeconds: number | null
+    endAvgDistance: number | null
+    endConfident: boolean | null
   }
   const [refining, setRefining] = useState(false)
   const [refineSuggestion, setRefineSuggestion] = useState<RefineSuggestion | null>(null)
@@ -218,7 +222,7 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
       cantoContentStart: episode.cantoContentStart ?? 0,
       cantoContentEnd: episode.cantoContentEnd ?? 0,
       englishContentStart: refineSuggestion.suggestedEnglishContentStart,
-      englishContentEnd: episode.englishContentEnd ?? 0,
+      englishContentEnd: refineSuggestion.suggestedEnglishContentEnd ?? episode.englishContentEnd ?? 0,
     })
     setRefineSuggestion(null)
   }
@@ -248,8 +252,15 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
   // value here vs. omitting it is how each call site opts in or out, rather than a separate flag.
   const [stopAtCantoTime, setStopAtCantoTime] = useState<number | null>(null)
 
+  // 1.25x makes marking sessions faster to get through without making the dialogue hard to
+  // follow — reset to normal speed once synced playback stops so it doesn't leak into anything
+  // else (e.g. a plain video played outside this flow).
+  const MARKING_PLAYBACK_RATE = 1.25
+
   function startSyncedPlayback(stopAt?: number) {
     if (!episode || !anchorsSet) return
+    cantoPlayerRef.current?.setPlaybackRate?.(MARKING_PLAYBACK_RATE)
+    englishPlayerRef.current?.setPlaybackRate?.(MARKING_PLAYBACK_RATE)
     cantoPlayerRef.current?.playVideo()
     englishPlayerRef.current?.playVideo()
     setStopAtCantoTime(stopAt ?? null)
@@ -259,6 +270,8 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
   function stopSyncedPlayback() {
     cantoPlayerRef.current?.pauseVideo()
     englishPlayerRef.current?.pauseVideo()
+    cantoPlayerRef.current?.setPlaybackRate?.(1)
+    englishPlayerRef.current?.setPlaybackRate?.(1)
     setSyncing(false)
   }
 
@@ -299,6 +312,8 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
       if (cantoTime >= stopAtCantoTime) {
         cantoPlayerRef.current?.pauseVideo()
         englishPlayerRef.current?.pauseVideo()
+        cantoPlayerRef.current?.setPlaybackRate?.(1)
+        englishPlayerRef.current?.setPlaybackRate?.(1)
         setSyncing(false)
         setStopAtCantoTime(null)
       }
@@ -308,7 +323,7 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
 
   // Space bar is the marking key while synced playback is running: hold it down for as long as a
   // character/narrator is speaking, release when they stop. The segment's end is the release
-  // time; its start is half a second before the press (reaction-time offset), clamped to the
+  // time; its start is one second before the press (reaction-time offset), clamped to the
   // same synchronous per-episode floor `nextSegmentStartFloorRef` already tracks, so it can never
   // overlap the previous segment even if the press lands a little early.
   useEffect(() => {
@@ -326,7 +341,7 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
       const floor =
         nextSegmentStartFloorRef.current[episodeId] ??
         (segments.length > 0 ? segments[segments.length - 1].cantoEnd : anchors.cantoContentStart)
-      pendingSegmentStartRef.current = Math.max(cantoTime - 0.5, floor)
+      pendingSegmentStartRef.current = Math.max(cantoTime - 1, floor)
     }
 
     async function handleKeyUp(event: KeyboardEvent) {
@@ -462,11 +477,20 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
                 )}
                 {refineSuggestion && (
                   <div className="mt-2 flex items-center gap-2">
-                    <p>
-                      Suggested English start: {refineSuggestion.suggestedEnglishContentStart.toFixed(2)} (offset{' '}
-                      {refineSuggestion.offsetSeconds.toFixed(2)}s
-                      {refineSuggestion.confident ? '' : ', low confidence'})
-                    </p>
+                    <div>
+                      <p>
+                        Suggested English start: {refineSuggestion.suggestedEnglishContentStart.toFixed(2)} (offset{' '}
+                        {refineSuggestion.startOffsetSeconds.toFixed(2)}s
+                        {refineSuggestion.startConfident ? '' : ', low confidence'})
+                      </p>
+                      {refineSuggestion.suggestedEnglishContentEnd !== null && (
+                        <p>
+                          Suggested English end: {refineSuggestion.suggestedEnglishContentEnd.toFixed(2)} (offset{' '}
+                          {refineSuggestion.endOffsetSeconds!.toFixed(2)}s
+                          {refineSuggestion.endConfident ? '' : ', low confidence'})
+                        </p>
+                      )}
+                    </div>
                     <button onClick={applyRefineSuggestion} className="border p-1 rounded">
                       Apply
                     </button>

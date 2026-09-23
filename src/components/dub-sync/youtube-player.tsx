@@ -79,6 +79,9 @@ export const YoutubePlayer = forwardRef<YoutubePlayerHandle, YoutubePlayerProps>
       },
       getCurrentTime: () =>
         typeof playerRef.current?.getCurrentTime === 'function' ? playerRef.current.getCurrentTime() : 0,
+      setPlaybackRate: (rate) => {
+        if (typeof playerRef.current?.setPlaybackRate === 'function') playerRef.current.setPlaybackRate(rate)
+      },
     }),
     []
   )

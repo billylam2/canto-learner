@@ -21,14 +21,14 @@ describe('refineAlignment', () => {
       {
         cantoneseVideoId: 'canto-1',
         englishVideoId: 'english-1',
-        cantoContentStart: 20,
-        englishContentStart: 18,
+        cantoTime: 20,
+        englishTime: 18,
       },
       { extractClipHashes }
     )
 
     expect(result.offsetSeconds).toBeCloseTo(0.5, 5)
-    expect(result.suggestedEnglishContentStart).toBeCloseTo(18.5, 5)
+    expect(result.suggestedEnglishTime).toBeCloseTo(18.5, 5)
     expect(result.avgDistance).toBe(0)
     expect(result.confident).toBe(true)
 
@@ -59,8 +59,8 @@ describe('refineAlignment', () => {
       {
         cantoneseVideoId: 'canto-1',
         englishVideoId: 'english-1',
-        cantoContentStart: 20,
-        englishContentStart: 18,
+        cantoTime: 20,
+        englishTime: 18,
       },
       { extractClipHashes }
     )
@@ -79,8 +79,8 @@ describe('refineAlignment', () => {
         {
           cantoneseVideoId: 'canto-1',
           englishVideoId: 'english-1',
-          cantoContentStart: 20,
-          englishContentStart: 18,
+          cantoTime: 20,
+          englishTime: 18,
         },
         { extractClipHashes }
       )

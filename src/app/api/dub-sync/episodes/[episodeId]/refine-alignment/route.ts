@@ -30,16 +30,41 @@ export async function POST(
   }
 
   try {
-    const result = await refineAlignment(
+    const start = await refineAlignment(
       {
         cantoneseVideoId: episode.cantoneseVideoId,
         englishVideoId: episode.englishVideoId,
-        cantoContentStart: episode.cantoContentStart,
-        englishContentStart: episode.englishContentStart,
+        cantoTime: episode.cantoContentStart,
+        englishTime: episode.englishContentStart,
       },
       { extractClipHashes }
     )
-    return NextResponse.json(result)
+
+    // Content end is only refined once both ends are already marked — a null end means the
+    // admin hasn't gotten there yet, not something to guess at.
+    const end =
+      episode.cantoContentEnd !== null && episode.englishContentEnd !== null
+        ? await refineAlignment(
+            {
+              cantoneseVideoId: episode.cantoneseVideoId,
+              englishVideoId: episode.englishVideoId,
+              cantoTime: episode.cantoContentEnd,
+              englishTime: episode.englishContentEnd,
+            },
+            { extractClipHashes }
+          )
+        : null
+
+    return NextResponse.json({
+      suggestedEnglishContentStart: start.suggestedEnglishTime,
+      startOffsetSeconds: start.offsetSeconds,
+      startAvgDistance: start.avgDistance,
+      startConfident: start.confident,
+      suggestedEnglishContentEnd: end?.suggestedEnglishTime ?? null,
+      endOffsetSeconds: end?.offsetSeconds ?? null,
+      endAvgDistance: end?.avgDistance ?? null,
+      endConfident: end?.confident ?? null,
+    })
   } catch (error) {
     return NextResponse.json({ error: `Failed to refine alignment: ${(error as Error).message}` }, { status: 502 })
   }

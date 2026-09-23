@@ -13,15 +13,17 @@ const MIN_OVERLAP_FRACTION = 0.5
 // from "these two clips don't actually line up on anything."
 const CONFIDENT_AVG_DISTANCE_THRESHOLD = 15
 
+// Generic over content start OR content end: both are just "a rough mark on each video that
+// should line up frame-accurately," so the same cross-correlation applies to either boundary.
 export interface RefineAlignmentInput {
   cantoneseVideoId: string
   englishVideoId: string
-  cantoContentStart: number
-  englishContentStart: number
+  cantoTime: number
+  englishTime: number
 }
 
 export interface RefineAlignmentResult {
-  suggestedEnglishContentStart: number
+  suggestedEnglishTime: number
   offsetSeconds: number
   avgDistance: number
   confident: boolean
@@ -38,8 +40,8 @@ export interface RefineAlignmentDeps {
   extractClipHashes: (options: ExtractClipHashesOptions) => Promise<FrameHash[]>
 }
 
-// Cantonese content start is treated as fixed (the admin marks it first); this only ever
-// suggests a correction to englishContentStart so the two line up frame-accurately.
+// The Cantonese mark is treated as fixed (the admin marks it first); this only ever suggests a
+// correction to the English mark so the two line up frame-accurately.
 export async function refineAlignment(
   input: RefineAlignmentInput,
   deps: RefineAlignmentDeps
@@ -47,13 +49,13 @@ export async function refineAlignment(
   const [cantoHashes, englishHashes] = await Promise.all([
     deps.extractClipHashes({
       videoId: input.cantoneseVideoId,
-      centerSeconds: input.cantoContentStart,
+      centerSeconds: input.cantoTime,
       windowSeconds: REFINE_ALIGNMENT_WINDOW_SECONDS,
       fps: REFINE_ALIGNMENT_FPS,
     }),
     deps.extractClipHashes({
       videoId: input.englishVideoId,
-      centerSeconds: input.englishContentStart,
+      centerSeconds: input.englishTime,
       windowSeconds: REFINE_ALIGNMENT_WINDOW_SECONDS,
       fps: REFINE_ALIGNMENT_FPS,
     }),
@@ -68,7 +70,7 @@ export async function refineAlignment(
   }
 
   return {
-    suggestedEnglishContentStart: input.englishContentStart + best.offsetSeconds,
+    suggestedEnglishTime: input.englishTime + best.offsetSeconds,
     offsetSeconds: best.offsetSeconds,
     avgDistance: best.avgDistance,
     confident: best.avgDistance < CONFIDENT_AVG_DISTANCE_THRESHOLD,
