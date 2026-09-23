@@ -302,6 +302,9 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
   function playSegment(segment: DubSegment) {
     if (!anchorsSet) return
     setSyncing(false)
+    // The clicked "Play" button would otherwise keep browser focus even after switching to
+    // marking afterward (see the same blur in startSyncedPlayback).
+    ;(document.activeElement as HTMLElement | null)?.blur?.()
     cantoPlayerRef.current?.setPlaybackRate?.(1)
     englishPlayerRef.current?.setPlaybackRate?.(1)
     controllerRef.current?.playSegment('canto', { start: segment.cantoStart, end: segment.cantoEnd }, () => {
@@ -367,10 +370,16 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
         return
       }
       const { segment } = await response.json()
+      // Belt-and-suspenders against the page jumping when the new row is added: whatever the
+      // exact cause turns out to be, forcibly restoring the pre-update scroll position on the
+      // next frame guarantees marking a segment never moves the viewport.
+      const scrollX = window.scrollX
+      const scrollY = window.scrollY
       setSegmentsByEpisode((current) => ({
         ...current,
         [episodeId]: [...(current[episodeId] ?? []), segment],
       }))
+      requestAnimationFrame(() => window.scrollTo(scrollX, scrollY))
     }
 
     window.addEventListener('keydown', handleKeyDown)
