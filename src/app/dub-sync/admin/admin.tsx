@@ -429,9 +429,14 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
               onBlur={saveTitle}
               className="text-2xl font-bold mb-4 border rounded p-1 w-full"
             />
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
               <div>
-                <YoutubePlayer ref={cantoPlayerRef} videoId={episode.cantoneseVideoId} elementId="canto-player" />
+                {/* The iframe defaults to a fixed 960px width regardless of its container, which
+                    overflowed this grid column and overlapped the other video/sidebar — forced
+                    responsive here so it shrinks to fit instead. */}
+                <div className="[&_iframe]:w-full [&_iframe]:h-auto [&_iframe]:aspect-video">
+                  <YoutubePlayer ref={cantoPlayerRef} videoId={episode.cantoneseVideoId} elementId="canto-player" />
+                </div>
                 <div className="flex gap-2 mt-2">
                   <button onClick={markCantoStart} className="border p-1 rounded">
                     Mark content start
@@ -448,7 +453,9 @@ export function Admin({ episodes: initialEpisodes, segmentsByEpisode: initialSeg
                 />
               </div>
               <div>
-                <YoutubePlayer ref={englishPlayerRef} videoId={episode.englishVideoId} elementId="english-player" />
+                <div className="[&_iframe]:w-full [&_iframe]:h-auto [&_iframe]:aspect-video">
+                  <YoutubePlayer ref={englishPlayerRef} videoId={episode.englishVideoId} elementId="english-player" />
+                </div>
                 <div className="flex gap-2 mt-2">
                   <button onClick={markEnglishStart} className="border p-1 rounded">
                     Mark content start
