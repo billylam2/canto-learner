@@ -4,6 +4,8 @@ export interface YouTubePlayerLike {
   pauseVideo(): void
   getCurrentTime(): number
   setPlaybackRate?(rate: number): void
+  mute?(): void
+  unMute?(): void
   destroy?(): void
 }
 
@@ -66,9 +68,20 @@ export class SegmentPlaybackController {
     this.stop()
     const sorted = [...segments].sort((a, b) => a.cantoStart - b.cantoStart)
     const cantoPlayer = this.getPlayer('canto')
+    const englishPlayer = this.getPlayer('english')
     this.onLanguageChange('canto')
     cantoPlayer.seekTo(startTime, true)
     cantoPlayer.playVideo()
+    // Mobile Safari (and other mobile browsers) only allow a video element's first-ever play()
+    // to succeed when it's called synchronously within a user gesture — every later programmatic
+    // play (e.g. from watchForSegmentEnd's interval below, switching to English mid-episode)
+    // would otherwise be silently blocked. Canto gets that one-time unlock from the call just
+    // above; priming English here — muted, so nothing audible happens — satisfies the same
+    // requirement for it, so its later async plays aren't blocked.
+    englishPlayer.mute?.()
+    englishPlayer.playVideo()
+    englishPlayer.pauseVideo()
+    englishPlayer.unMute?.()
     const startIndex = sorted.findIndex((segment) => segment.cantoEnd > startTime)
     this.watchForSegmentEnd(sorted, startIndex)
   }

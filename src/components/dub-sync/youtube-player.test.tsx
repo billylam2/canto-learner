@@ -16,6 +16,8 @@ function makeFakePlayer() {
     pauseVideo: vi.fn(),
     getCurrentTime: vi.fn(() => 42),
     setPlaybackRate: vi.fn(),
+    mute: vi.fn(),
+    unMute: vi.fn(),
     destroy: vi.fn(),
   }
 }
@@ -61,10 +63,14 @@ describe('YoutubePlayer', () => {
     ref.current?.playVideo()
     ref.current?.pauseVideo()
     ref.current?.setPlaybackRate?.(1.25)
+    ref.current?.mute?.()
+    ref.current?.unMute?.()
     expect(fakePlayer.seekTo).toHaveBeenCalledWith(10, true)
     expect(fakePlayer.playVideo).toHaveBeenCalled()
     expect(fakePlayer.pauseVideo).toHaveBeenCalled()
     expect(fakePlayer.setPlaybackRate).toHaveBeenCalledWith(1.25)
+    expect(fakePlayer.mute).toHaveBeenCalled()
+    expect(fakePlayer.unMute).toHaveBeenCalled()
     expect(ref.current?.getCurrentTime()).toBe(42)
   })
 
@@ -84,6 +90,8 @@ describe('YoutubePlayer', () => {
     expect(() => ref.current?.seekTo(10, true)).not.toThrow()
     expect(() => ref.current?.playVideo()).not.toThrow()
     expect(() => ref.current?.pauseVideo()).not.toThrow()
+    expect(() => ref.current?.mute?.()).not.toThrow()
+    expect(() => ref.current?.unMute?.()).not.toThrow()
     expect(ref.current?.getCurrentTime()).toBe(0)
   })
 

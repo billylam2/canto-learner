@@ -82,6 +82,12 @@ export const YoutubePlayer = forwardRef<YoutubePlayerHandle, YoutubePlayerProps>
       setPlaybackRate: (rate) => {
         if (typeof playerRef.current?.setPlaybackRate === 'function') playerRef.current.setPlaybackRate(rate)
       },
+      mute: () => {
+        if (typeof playerRef.current?.mute === 'function') playerRef.current.mute()
+      },
+      unMute: () => {
+        if (typeof playerRef.current?.unMute === 'function') playerRef.current.unMute()
+      },
     }),
     []
   )

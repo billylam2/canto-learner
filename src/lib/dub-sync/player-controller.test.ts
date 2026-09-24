@@ -22,6 +22,8 @@ function makePlayer(currentTimeSequence: number[]): YouTubePlayerLike {
       index += 1
       return value
     }),
+    mute: vi.fn(),
+    unMute: vi.fn(),
   }
 }
 
@@ -90,6 +92,24 @@ describe('SegmentPlaybackController', () => {
 
       expect(cantoPlayer.seekTo).toHaveBeenCalledWith(5, true)
       expect(cantoPlayer.playVideo).toHaveBeenCalled()
+    })
+
+    it('primes the english player (muted play+pause) so mobile browsers allow it to autoplay later', () => {
+      // Mobile Safari only allows a video element's first-ever play() to succeed when it's
+      // called synchronously within a user gesture (this call). Without priming it here, the
+      // English player's first real play() — triggered later from watchForSegmentEnd's async
+      // interval, not a gesture — gets silently blocked on those browsers.
+      const cantoPlayer = makePlayer([5])
+      const englishPlayer = makePlayer([0])
+      const getPlayer = vi.fn((lang: DubLanguage) => (lang === 'canto' ? cantoPlayer : englishPlayer))
+      const controller = new SegmentPlaybackController(getPlayer, vi.fn(), 100)
+
+      controller.playEpisodeAlternating([{ cantoStart: 10, cantoEnd: 14, englishStart: 22, englishEnd: 26 }], 5)
+
+      expect(englishPlayer.mute).toHaveBeenCalled()
+      expect(englishPlayer.playVideo).toHaveBeenCalled()
+      expect(englishPlayer.pauseVideo).toHaveBeenCalled()
+      expect(englishPlayer.unMute).toHaveBeenCalled()
     })
 
     it('plays the english segment once canto reaches its end, then resumes canto at cantoEnd', () => {
