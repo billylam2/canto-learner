@@ -94,6 +94,59 @@ export function Admin({
     }
   }
 
+  // Same draft/reset pattern as titleDraft above.
+  const [cantoVideoIdDraft, setCantoVideoIdDraft] = useState(episode?.cantoneseVideoId ?? '')
+  const [englishVideoIdDraft, setEnglishVideoIdDraft] = useState(episode?.englishVideoId ?? '')
+  const [previousEpisodeVideoIds, setPreviousEpisodeVideoIds] = useState({
+    canto: episode?.cantoneseVideoId ?? '',
+    english: episode?.englishVideoId ?? '',
+  })
+  if (
+    (episode?.cantoneseVideoId ?? '') !== previousEpisodeVideoIds.canto ||
+    (episode?.englishVideoId ?? '') !== previousEpisodeVideoIds.english
+  ) {
+    setPreviousEpisodeVideoIds({ canto: episode?.cantoneseVideoId ?? '', english: episode?.englishVideoId ?? '' })
+    setCantoVideoIdDraft(episode?.cantoneseVideoId ?? '')
+    setEnglishVideoIdDraft(episode?.englishVideoId ?? '')
+  }
+
+  async function saveVideoId(field: 'cantoneseVideoId' | 'englishVideoId', value: string) {
+    if (!episode || value === episode[field]) return
+    const response = await fetch(`/api/dub-sync/episodes/${episode.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ [field]: value }),
+    })
+    if (response.ok) {
+      const { episode: updated } = await response.json()
+      updateEpisodeInPlace(updated)
+    }
+  }
+
+  function handleEpisodeDeleted(deletedId: string) {
+    setEpisodes((current) => current.filter((candidate) => candidate.id !== deletedId))
+    setSegmentsByEpisode((current) => {
+      const { [deletedId]: _removed, ...rest } = current
+      return rest
+    })
+    setCheckpointsByEpisode((current) => {
+      const { [deletedId]: _removed, ...rest } = current
+      return rest
+    })
+    if (selectedEpisodeId === deletedId) {
+      const remaining = episodes.filter((candidate) => candidate.id !== deletedId)
+      setSelectedEpisodeId(remaining[0]?.id ?? null)
+    }
+  }
+
+  async function deleteEpisodeClicked(id: string, title: string) {
+    if (!window.confirm(`Delete "${title}" and all its marked segments and checkpoints? This cannot be undone.`)) {
+      return
+    }
+    const response = await fetch(`/api/dub-sync/episodes/${id}`, { method: 'DELETE' })
+    if (response.ok) handleEpisodeDeleted(id)
+  }
+
   async function saveAnchors(next: {
     cantoContentStart: number
     cantoContentEnd: number
@@ -504,12 +557,19 @@ export function Admin({
         <h2 className="font-bold">Episodes</h2>
         <ul className="flex flex-col gap-1">
           {episodes.map((candidate) => (
-            <li key={candidate.id}>
+            <li key={candidate.id} className="flex items-center gap-1">
               <button
                 onClick={() => selectEpisode(candidate.id)}
                 className={`text-left w-full p-1 rounded ${candidate.id === selectedEpisodeId ? 'bg-gray-200' : ''}`}
               >
                 {candidate.title}
+              </button>
+              <button
+                onClick={() => deleteEpisodeClicked(candidate.id, candidate.title)}
+                className="border p-1 rounded text-xs shrink-0"
+                title="Delete this episode and all its segments and checkpoints"
+              >
+                Delete
               </button>
             </li>
           ))}
@@ -529,6 +589,26 @@ export function Admin({
               onBlur={saveTitle}
               className="text-2xl font-bold mb-4 border rounded p-1 w-full"
             />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+              <label className="flex flex-col gap-1">
+                Edit Cantonese video ID
+                <input
+                  value={cantoVideoIdDraft}
+                  onChange={(e) => setCantoVideoIdDraft(e.target.value)}
+                  onBlur={() => saveVideoId('cantoneseVideoId', cantoVideoIdDraft)}
+                  className="border p-1 rounded"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                Edit English video ID
+                <input
+                  value={englishVideoIdDraft}
+                  onChange={(e) => setEnglishVideoIdDraft(e.target.value)}
+                  onBlur={() => saveVideoId('englishVideoId', englishVideoIdDraft)}
+                  className="border p-1 rounded"
+                />
+              </label>
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
               <div>
                 {/* The iframe defaults to a fixed 960px width regardless of its container, which

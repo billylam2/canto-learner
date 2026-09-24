@@ -107,6 +107,82 @@ describe('Admin', () => {
     expect(screen.getByRole('button', { name: 'Renamed Episode' })).toBeInTheDocument()
   })
 
+  it('edits and saves the Cantonese video ID on blur', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ episode: { ...episodeA, cantoneseVideoId: 'new-canto-id' } }),
+    } as Response)
+
+    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} />)
+
+    const input = screen.getByLabelText('Edit Cantonese video ID')
+    expect(input).toHaveValue('canto-a')
+    fireEvent.change(input, { target: { value: 'new-canto-id' } })
+    fireEvent.blur(input)
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a',
+        expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ cantoneseVideoId: 'new-canto-id' }) })
+      )
+    )
+  })
+
+  it('edits and saves the English video ID on blur', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ episode: { ...episodeA, englishVideoId: 'new-eng-id' } }),
+    } as Response)
+
+    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} />)
+
+    const input = screen.getByLabelText('Edit English video ID')
+    fireEvent.change(input, { target: { value: 'new-eng-id' } })
+    fireEvent.blur(input)
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a',
+        expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ englishVideoId: 'new-eng-id' }) })
+      )
+    )
+  })
+
+  it('does not save a video ID when blurred unchanged', () => {
+    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    fireEvent.blur(screen.getByLabelText('Edit Cantonese video ID'))
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('deletes an episode after confirming, and selects a remaining one', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true))
+    vi.mocked(fetch).mockResolvedValue({ ok: true, json: () => Promise.resolve({ ok: true }) } as Response)
+
+    render(<Admin episodes={[episodeA, episodeB]} segmentsByEpisode={{ 'ep-a': [], 'ep-b': [] }} />)
+    expect(screen.getByLabelText('Episode title')).toHaveValue('Muddy Puddles')
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0])
+
+    expect(window.confirm).toHaveBeenCalled()
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith('/api/dub-sync/episodes/ep-a', expect.objectContaining({ method: 'DELETE' }))
+    )
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Muddy Puddles' })).not.toBeInTheDocument())
+    expect(screen.getByLabelText('Episode title')).toHaveValue('The Playgroup')
+  })
+
+  it('does not delete an episode when the confirmation is cancelled', () => {
+    vi.stubGlobal('confirm', vi.fn(() => false))
+
+    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+    expect(window.confirm).toHaveBeenCalled()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Muddy Puddles' })).toBeInTheDocument()
+  })
+
   it('marks the canto content start from the canto player and saves it', async () => {
     const refs = captureRefs()
     vi.mocked(fetch).mockResolvedValue({
