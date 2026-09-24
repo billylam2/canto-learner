@@ -40,6 +40,7 @@ const defaultProps = {
   markedRanges: [],
   pendingSelection: null,
   onSelectionDrafted: vi.fn(),
+  allowDragSelect: true,
   color: '#4ade80',
   playheadSeconds: null,
 }
@@ -76,6 +77,20 @@ describe('WaveformTrack', () => {
     const canvas = container.querySelector('canvas')!
 
     fireEvent.mouseDown(canvas, { clientX: 100 })
+    fireEvent.mouseUp(window)
+
+    expect(onSelectionDrafted).not.toHaveBeenCalled()
+  })
+
+  it('does not draft a selection via drag when allowDragSelect is false', () => {
+    const onSelectionDrafted = vi.fn()
+    const { container } = render(
+      <WaveformTrack {...defaultProps} allowDragSelect={false} onSelectionDrafted={onSelectionDrafted} />
+    )
+    const canvas = container.querySelector('canvas')!
+
+    fireEvent.mouseDown(canvas, { clientX: 60 })
+    fireEvent.mouseMove(window, { clientX: 180 })
     fireEvent.mouseUp(window)
 
     expect(onSelectionDrafted).not.toHaveBeenCalled()

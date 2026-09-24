@@ -62,8 +62,6 @@ export function Admin({
 
   function selectEpisode(id: string) {
     setSelectedEpisodeId(id)
-    setRefineSuggestion(null)
-    setRefineError(null)
     // The waveform panel now keeps showing its playhead line even once paused (not just while
     // playing), so a leftover time from whatever episode was playing before would otherwise show
     // a misleading line on an episode that's never been touched.
@@ -81,7 +79,7 @@ export function Admin({
     setEpisodes((current) => current.map((candidate) => (candidate.id === updated.id ? updated : candidate)))
   }
 
-  const [markingMode, setMarkingMode] = useState<'spacebar' | 'waveform'>('spacebar')
+  const [markingMode, setMarkingMode] = useState<'spacebar' | 'waveform'>('waveform')
 
   function appendSegment(segment: DubSegment) {
     if (!selectedEpisodeId) return
@@ -286,47 +284,6 @@ export function Admin({
   }
 
   const anchorsSet = episode ? hasAllAnchors(episode) : false
-  const canRefineAlignment = episode ? episode.cantoContentStart !== null && episode.englishContentStart !== null : false
-
-  interface RefineSuggestion {
-    suggestedEnglishContentStart: number
-    startOffsetSeconds: number
-    startAvgDistance: number
-    startConfident: boolean
-    suggestedEnglishContentEnd: number | null
-    endOffsetSeconds: number | null
-    endAvgDistance: number | null
-    endConfident: boolean | null
-  }
-  const [refining, setRefining] = useState(false)
-  const [refineSuggestion, setRefineSuggestion] = useState<RefineSuggestion | null>(null)
-  const [refineError, setRefineError] = useState<string | null>(null)
-
-  async function runRefineAlignment() {
-    if (!episode) return
-    setRefining(true)
-    setRefineError(null)
-    setRefineSuggestion(null)
-    const response = await fetch(`/api/dub-sync/episodes/${episode.id}/refine-alignment`, { method: 'POST' })
-    setRefining(false)
-    const body = await response.json()
-    if (!response.ok) {
-      setRefineError(body.error ?? 'Failed to refine alignment')
-      return
-    }
-    setRefineSuggestion(body)
-  }
-
-  function applyRefineSuggestion() {
-    if (!episode || !refineSuggestion) return
-    saveAnchors({
-      cantoContentStart: episode.cantoContentStart ?? 0,
-      cantoContentEnd: episode.cantoContentEnd ?? 0,
-      englishContentStart: refineSuggestion.suggestedEnglishContentStart,
-      englishContentEnd: refineSuggestion.suggestedEnglishContentEnd ?? episode.englishContentEnd ?? 0,
-    })
-    setRefineSuggestion(null)
-  }
 
   function handleSegmentUpdated(updated: DubSegment) {
     if (!selectedEpisodeId) return
@@ -587,23 +544,6 @@ export function Admin({
     }
   }, [syncing, episode, anchorsSet, segments, checkpoints, markingMode])
 
-  const [captionsError, setCaptionsError] = useState<string | null>(null)
-
-  async function runGenerateFromCaptions() {
-    if (!episode) return
-    setCaptionsError(null)
-    const response = await fetch(`/api/dub-sync/episodes/${episode.id}/generate-segments`, { method: 'POST' })
-    const body = await response.json()
-    if (!response.ok) {
-      setCaptionsError(body.error ?? 'Failed to generate segments')
-      return
-    }
-    setSegmentsByEpisode((current) => ({
-      ...current,
-      [episode.id]: [...(current[episode.id] ?? []), ...body.segments],
-    }))
-  }
-
   return (
     <div className="flex gap-6 p-6">
       <aside className="w-64 flex flex-col gap-2">
@@ -662,127 +602,7 @@ export function Admin({
                 />
               </label>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-              <div>
-                {/* The iframe defaults to a fixed 960px width regardless of its container, which
-                    overflowed this grid column and overlapped the other video/sidebar — forced
-                    responsive here so it shrinks to fit instead. */}
-                <div className="[&_iframe]:w-full [&_iframe]:h-auto [&_iframe]:aspect-video">
-                  <YoutubePlayer ref={cantoPlayerRef} videoId={episode.cantoneseVideoId} elementId="canto-player" />
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={markCantoStart}
-                    className="border p-1 rounded"
-                    title="Set this video's content start to the current playback position"
-                  >
-                    Mark content start
-                  </button>
-                  <button
-                    onClick={markCantoEnd}
-                    className="border p-1 rounded"
-                    title="Set this video's content end to the current playback position"
-                  >
-                    Mark content end
-                  </button>
-                </div>
-                <AnchorFields
-                  start={episode.cantoContentStart}
-                  end={episode.cantoContentEnd}
-                  onSaveStart={editCantoStart}
-                  onSaveEnd={editCantoEnd}
-                />
-              </div>
-              <div>
-                <div className="[&_iframe]:w-full [&_iframe]:h-auto [&_iframe]:aspect-video">
-                  <YoutubePlayer ref={englishPlayerRef} videoId={episode.englishVideoId} elementId="english-player" />
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={markEnglishStart}
-                    className="border p-1 rounded"
-                    title="Set this video's content start to the current playback position"
-                  >
-                    Mark content start
-                  </button>
-                  <button
-                    onClick={markEnglishEnd}
-                    className="border p-1 rounded"
-                    title="Set this video's content end to the current playback position"
-                  >
-                    Mark content end
-                  </button>
-                </div>
-                <AnchorFields
-                  start={episode.englishContentStart}
-                  end={episode.englishContentEnd}
-                  onSaveStart={editEnglishStart}
-                  onSaveEnd={editEnglishEnd}
-                />
-              </div>
-            </div>
-            {canRefineAlignment && (
-              <div className="mb-4">
-                <button
-                  onClick={runRefineAlignment}
-                  disabled={refining}
-                  className="border p-2 rounded"
-                  title="Auto-suggest a frame-accurate correction to the English anchors using video similarity"
-                >
-                  {refining ? 'Refining…' : 'Refine precision'}
-                </button>
-                {refineError && (
-                  <p role="alert" className="text-red-600 mt-2">
-                    {refineError}
-                  </p>
-                )}
-                {refineSuggestion && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <div>
-                      <p>
-                        Suggested English start: {refineSuggestion.suggestedEnglishContentStart.toFixed(2)} (offset{' '}
-                        {refineSuggestion.startOffsetSeconds.toFixed(2)}s
-                        {refineSuggestion.startConfident ? '' : ', low confidence'})
-                      </p>
-                      {refineSuggestion.suggestedEnglishContentEnd !== null && (
-                        <p>
-                          Suggested English end: {refineSuggestion.suggestedEnglishContentEnd.toFixed(2)} (offset{' '}
-                          {refineSuggestion.endOffsetSeconds!.toFixed(2)}s
-                          {refineSuggestion.endConfident ? '' : ', low confidence'})
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={applyRefineSuggestion}
-                      className="border p-1 rounded"
-                      title="Use the suggested English times as the new anchors"
-                    >
-                      Apply
-                    </button>
-                    <button
-                      onClick={() => setRefineSuggestion(null)}
-                      className="border p-1 rounded"
-                      title="Discard the suggestion without applying it"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
             {!anchorsSet && <p className="text-gray-500 mb-4">Set anchors before marking segments.</p>}
-
-            <div className="flex gap-2 mb-4">
-              <button
-                onClick={runGenerateFromCaptions}
-                disabled={!anchorsSet}
-                className="border p-2 rounded"
-                title="Create segments automatically from this video's caption timing"
-              >
-                Generate from captions
-              </button>
-            </div>
 
             <div className="flex gap-2 mb-4">
               <button
@@ -912,6 +732,66 @@ export function Admin({
               </div>
             )}
 
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+              <div>
+                {/* The iframe defaults to a fixed 960px width regardless of its container, which
+                    overflowed this grid column and overlapped the other video/sidebar — forced
+                    responsive here so it shrinks to fit instead. */}
+                <div className="[&_iframe]:w-full [&_iframe]:h-auto [&_iframe]:aspect-video">
+                  <YoutubePlayer ref={cantoPlayerRef} videoId={episode.cantoneseVideoId} elementId="canto-player" />
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={markCantoStart}
+                    className="border p-1 rounded"
+                    title="Set this video's content start to the current playback position"
+                  >
+                    Mark content start
+                  </button>
+                  <button
+                    onClick={markCantoEnd}
+                    className="border p-1 rounded"
+                    title="Set this video's content end to the current playback position"
+                  >
+                    Mark content end
+                  </button>
+                </div>
+                <AnchorFields
+                  start={episode.cantoContentStart}
+                  end={episode.cantoContentEnd}
+                  onSaveStart={editCantoStart}
+                  onSaveEnd={editCantoEnd}
+                />
+              </div>
+              <div>
+                <div className="[&_iframe]:w-full [&_iframe]:h-auto [&_iframe]:aspect-video">
+                  <YoutubePlayer ref={englishPlayerRef} videoId={episode.englishVideoId} elementId="english-player" />
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={markEnglishStart}
+                    className="border p-1 rounded"
+                    title="Set this video's content start to the current playback position"
+                  >
+                    Mark content start
+                  </button>
+                  <button
+                    onClick={markEnglishEnd}
+                    className="border p-1 rounded"
+                    title="Set this video's content end to the current playback position"
+                  >
+                    Mark content end
+                  </button>
+                </div>
+                <AnchorFields
+                  start={episode.englishContentStart}
+                  end={episode.englishContentEnd}
+                  onSaveStart={editEnglishStart}
+                  onSaveEnd={editEnglishEnd}
+                />
+              </div>
+            </div>
+
             {markingMode === 'waveform' && anchorsSet && (
               <WaveformMarking
                 key={episode.id}
@@ -926,12 +806,6 @@ export function Admin({
                 cantoTimeSeconds={waveformCantoTime}
                 englishTimeSeconds={waveformEnglishTime}
               />
-            )}
-
-            {captionsError && (
-              <p role="alert" className="text-red-600 mb-4">
-                {captionsError}
-              </p>
             )}
 
             <CheckpointTable

@@ -18,6 +18,7 @@ export interface WaveformTrackProps {
   markedRanges: WaveformRange[]
   pendingSelection: WaveformRange | null
   onSelectionDrafted: (start: number, end: number) => void
+  allowDragSelect: boolean
   color: string
   playheadSeconds: number | null
 }
@@ -33,6 +34,7 @@ export function WaveformTrack({
   markedRanges,
   pendingSelection,
   onSelectionDrafted,
+  allowDragSelect,
   color,
   playheadSeconds,
 }: WaveformTrackProps) {
@@ -168,6 +170,7 @@ export function WaveformTrack({
         height={height}
         className="self-start shrink-0"
         onMouseDown={(event) => {
+          if (!allowDragSelect) return
           const seconds = secondsAtClientX(event.clientX)
           setDragStartSeconds(seconds)
           setDragCurrentSeconds(seconds)

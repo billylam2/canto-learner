@@ -45,14 +45,13 @@ describe('WaveformMarking', () => {
     vi.stubGlobal('fetch', vi.fn())
   })
 
-  it('does not post when only the Cantonese side is drafted', () => {
+  it('does not post before any range is drafted', () => {
     renderMarking()
-    fireEvent.click(screen.getByRole('button', { name: `draft-${CANTO_COLOR}` }))
     fireEvent.click(screen.getByRole('button', { name: 'Confirm segment' }))
     expect(fetch).not.toHaveBeenCalled()
   })
 
-  it('posts the combined segment once both sides are drafted, and clears both', async () => {
+  it('dragging the Cantonese track derives the English range via englishTimeFor and posts both on confirm', async () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: () =>
@@ -64,8 +63,8 @@ describe('WaveformMarking', () => {
             label: null,
             cantoStart: 10,
             cantoEnd: 12,
-            englishStart: 10,
-            englishEnd: 12,
+            englishStart: 20,
+            englishEnd: 24,
           },
         }),
     } as Response)
@@ -73,30 +72,39 @@ describe('WaveformMarking', () => {
 
     renderMarking({ onSegmentCreated })
     fireEvent.click(screen.getByRole('button', { name: `draft-${CANTO_COLOR}` }))
-    fireEvent.click(screen.getByRole('button', { name: `draft-${ENGLISH_COLOR}` }))
     fireEvent.click(screen.getByRole('button', { name: 'Confirm segment' }))
 
+    // anchors: canto 10-110 -> english 20-220, so englishTimeFor(10)=20, englishTimeFor(12)=24
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
         '/api/dub-sync/episodes/ep-1/segments',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ cantoStart: 10, cantoEnd: 12, englishStart: 10, englishEnd: 12 }),
+          body: JSON.stringify({ cantoStart: 10, cantoEnd: 12, englishStart: 20, englishEnd: 24 }),
         })
       )
     )
     await waitFor(() => expect(onSegmentCreated).toHaveBeenCalled())
-    expect(screen.queryByRole('button', { name: 'Cancel Cantonese line' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cancel selection' })).not.toBeInTheDocument()
   })
 
-  it('Cancel clears a pending side without posting', () => {
+  it('dragging the English track does nothing — a single Cantonese drag drives both sides', () => {
+    renderMarking()
+    fireEvent.click(screen.getByRole('button', { name: `draft-${ENGLISH_COLOR}` }))
+
+    expect(screen.queryByRole('button', { name: 'Cancel selection' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Confirm segment' })).toBeDisabled()
+  })
+
+  it('Cancel clears the pending selection without posting', () => {
     renderMarking()
     fireEvent.click(screen.getByRole('button', { name: `draft-${CANTO_COLOR}` }))
-    expect(screen.getByRole('button', { name: 'Cancel Cantonese line' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancel selection' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel Cantonese line' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel selection' }))
 
-    expect(screen.queryByRole('button', { name: 'Cancel Cantonese line' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cancel selection' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm segment' }))
     expect(fetch).not.toHaveBeenCalled()
   })
 

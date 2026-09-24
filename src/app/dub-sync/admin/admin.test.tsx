@@ -259,246 +259,6 @@ describe('Admin', () => {
   })
 })
 
-describe('Admin refine alignment', () => {
-  const episodeWithBothStarts = {
-    ...episodeA,
-    cantoContentStart: 15.7394,
-    englishContentStart: 14.7089,
-  }
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    vi.stubGlobal('fetch', vi.fn())
-    vi.mocked(YoutubePlayer).mockImplementation(({ elementId }: { elementId: string }) => (
-      <div data-testid={`player-${elementId}`} />
-    ))
-  })
-
-  it('does not show the refine-precision button until both content starts are marked', () => {
-    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} />)
-    expect(screen.queryByRole('button', { name: 'Refine precision' })).not.toBeInTheDocument()
-  })
-
-  it('runs refinement and shows an apply/dismiss suggestion', async () => {
-    vi.mocked(fetch).mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          suggestedEnglishContentStart: 14.8089,
-          startOffsetSeconds: 0.1,
-          startAvgDistance: 2.24,
-          startConfident: true,
-          suggestedEnglishContentEnd: null,
-          endOffsetSeconds: null,
-          endAvgDistance: null,
-          endConfident: null,
-        }),
-    } as Response)
-
-    render(<Admin episodes={[episodeWithBothStarts]} segmentsByEpisode={{ 'ep-a': [] }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Refine precision' }))
-
-    await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith(
-        '/api/dub-sync/episodes/ep-a/refine-alignment',
-        expect.objectContaining({ method: 'POST' })
-      )
-    )
-    expect(await screen.findByRole('button', { name: 'Apply' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument()
-    expect(screen.getByText(/14\.81/)).toBeInTheDocument()
-  })
-
-  it('applies the suggested englishContentStart while keeping other anchors unchanged', async () => {
-    vi.mocked(fetch).mockImplementation((url: unknown, init?: RequestInit) => {
-      const u = String(url)
-      if (u.includes('refine-alignment')) {
-        return Promise.resolve({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              suggestedEnglishContentStart: 14.8089,
-              startOffsetSeconds: 0.1,
-              startAvgDistance: 2.24,
-              startConfident: true,
-              suggestedEnglishContentEnd: null,
-              endOffsetSeconds: null,
-              endAvgDistance: null,
-              endConfident: null,
-            }),
-        } as Response)
-      }
-      return Promise.resolve({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            episode: { ...episodeWithBothStarts, englishContentStart: 14.8089 },
-          }),
-      } as Response)
-    })
-
-    render(<Admin episodes={[episodeWithBothStarts]} segmentsByEpisode={{ 'ep-a': [] }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Refine precision' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Apply' }))
-
-    await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith(
-        '/api/dub-sync/episodes/ep-a',
-        expect.objectContaining({
-          method: 'PATCH',
-          body: JSON.stringify({
-            cantoContentStart: 15.7394,
-            cantoContentEnd: 0,
-            englishContentStart: 14.8089,
-            englishContentEnd: 0,
-          }),
-        })
-      )
-    )
-    expect(screen.queryByRole('button', { name: 'Apply' })).not.toBeInTheDocument()
-  })
-
-  it('dismisses the suggestion without saving anything', async () => {
-    vi.mocked(fetch).mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          suggestedEnglishContentStart: 14.8089,
-          startOffsetSeconds: 0.1,
-          startAvgDistance: 2.24,
-          startConfident: true,
-          suggestedEnglishContentEnd: null,
-          endOffsetSeconds: null,
-          endAvgDistance: null,
-          endConfident: null,
-        }),
-    } as Response)
-
-    render(<Admin episodes={[episodeWithBothStarts]} segmentsByEpisode={{ 'ep-a': [] }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Refine precision' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Dismiss' }))
-
-    expect(screen.queryByRole('button', { name: 'Apply' })).not.toBeInTheDocument()
-    expect(fetch).toHaveBeenCalledTimes(1) // only the refine-alignment call, never a PATCH
-  })
-
-  it('shows an error message when refinement fails', async () => {
-    vi.mocked(fetch).mockResolvedValue({
-      ok: false,
-      json: () => Promise.resolve({ error: 'Failed to refine alignment: yt-dlp exited with code 1' }),
-    } as Response)
-
-    render(<Admin episodes={[episodeWithBothStarts]} segmentsByEpisode={{ 'ep-a': [] }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Refine precision' }))
-
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('yt-dlp exited with code 1'))
-  })
-
-  it('also applies a suggested content end when the response includes one', async () => {
-    const episodeWithBothAnchors = {
-      ...episodeWithBothStarts,
-      cantoContentEnd: 286.273,
-      englishContentEnd: 285.344,
-    }
-    vi.mocked(fetch).mockImplementation((url: unknown) => {
-      const u = String(url)
-      if (u.includes('refine-alignment')) {
-        return Promise.resolve({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              suggestedEnglishContentStart: 14.8089,
-              startOffsetSeconds: 0.1,
-              startAvgDistance: 2.24,
-              startConfident: true,
-              suggestedEnglishContentEnd: 285.5,
-              endOffsetSeconds: 0.156,
-              endAvgDistance: 3.1,
-              endConfident: true,
-            }),
-        } as Response)
-      }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ episode: episodeWithBothAnchors }),
-      } as Response)
-    })
-
-    render(<Admin episodes={[episodeWithBothAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Refine precision' }))
-
-    expect(await screen.findByText(/Suggested English end: 285\.50/)).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
-
-    await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith(
-        '/api/dub-sync/episodes/ep-a',
-        expect.objectContaining({
-          method: 'PATCH',
-          body: JSON.stringify({
-            cantoContentStart: 15.7394,
-            cantoContentEnd: 286.273,
-            englishContentStart: 14.8089,
-            englishContentEnd: 285.5,
-          }),
-        })
-      )
-    )
-  })
-})
-
-describe('Admin generate from captions', () => {
-  const episodeWithAnchors = {
-    ...episodeA,
-    cantoContentStart: 10,
-    cantoContentEnd: 110,
-    englishContentStart: 20,
-    englishContentEnd: 220,
-  }
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    vi.mocked(YoutubePlayer).mockImplementation(({ elementId }: { elementId: string }) => (
-      <div data-testid={`player-${elementId}`} />
-    ))
-  })
-
-  it('runs generate from captions and appends returned segments', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            segments: [
-              {
-                id: 'seg-2',
-                episodeId: 'ep-a',
-                position: 0,
-                label: null,
-                cantoStart: 10,
-                cantoEnd: 15,
-                englishStart: 20,
-                englishEnd: 26,
-              },
-            ],
-          }),
-      })
-    )
-
-    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Generate from captions' }))
-
-    await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith(
-        '/api/dub-sync/episodes/ep-a/generate-segments',
-        expect.objectContaining({ method: 'POST' })
-      )
-    )
-  })
-})
-
 describe('Admin synced playback', () => {
   const episodeWithAnchors = {
     ...episodeA,
@@ -758,18 +518,18 @@ describe('Admin waveform marking', () => {
     vi.useRealTimers()
   })
 
-  it('defaults to spacebar marking, and toggles to the waveform panel', () => {
+  it('defaults to waveform marking, and toggles to the spacebar panel', () => {
     render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
-
-    expect(screen.queryByTestId('waveform-marking')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Waveform marking' }))
 
     expect(screen.getByTestId('waveform-marking')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Spacebar marking' }))
 
     expect(screen.queryByTestId('waveform-marking')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Waveform marking' }))
+
+    expect(screen.getByTestId('waveform-marking')).toBeInTheDocument()
   })
 
   it('disables the Waveform marking toggle until anchors are set', () => {
@@ -1022,6 +782,7 @@ describe('Admin spacebar marking', () => {
 
     render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
     refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Spacebar marking' }))
     fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
 
     fireEvent.keyDown(window, { code: 'Space' })
@@ -1072,6 +833,7 @@ describe('Admin spacebar marking', () => {
       />
     )
     refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Spacebar marking' }))
     fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
 
     // Pressed at 35.5, so an unclamped -1s offset would be 34.5 — before the previous
@@ -1099,6 +861,7 @@ describe('Admin spacebar marking', () => {
 
     render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
     refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Spacebar marking' }))
     fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
 
     // pressed at 5, -0.5 = 4.5, but the floor (content start) clamps pendingStart to 10
@@ -1130,6 +893,7 @@ describe('Admin spacebar marking', () => {
       />
     )
     refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Spacebar marking' }))
     fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
 
     fireEvent.keyDown(window, { code: 'Space' })
@@ -1162,6 +926,7 @@ describe('Admin spacebar marking', () => {
 
     render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
     refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Spacebar marking' }))
     fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
 
     fireEvent.keyDown(window, { code: 'Space' }) // real press at 20 -> pendingStart 19
@@ -1191,6 +956,7 @@ describe('Admin spacebar marking', () => {
 
     render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
     refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Spacebar marking' }))
     fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
 
     const firstPressNotPrevented = fireEvent.keyDown(window, { code: 'Space' })
@@ -1209,6 +975,7 @@ describe('Admin spacebar marking', () => {
 
     render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
     refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Spacebar marking' }))
 
     fireEvent.keyDown(window, { code: 'Space' })
     fireEvent.keyUp(window, { code: 'Space' })

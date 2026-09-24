@@ -27,6 +27,8 @@ export interface WaveformMarkingProps {
   englishTimeSeconds?: number
 }
 
+function noop() {}
+
 export function WaveformMarking({
   episodeId,
   cantoPeaks,
@@ -42,9 +44,23 @@ export function WaveformMarking({
   const [pixelsPerSecond, setPixelsPerSecond] = useState(DEFAULT_PIXELS_PER_SECOND)
   const [cantoViewStart, setCantoViewStart] = useState(0)
   const [englishViewStart, setEnglishViewStart] = useState(0)
-  const [cantoPending, setCantoPending] = useState<WaveformRange | null>(null)
-  const [englishPending, setEnglishPending] = useState<WaveformRange | null>(null)
+  // A drag on the Cantonese track alone defines the whole segment — its matching English range is
+  // derived below via englishTimeFor, never dragged independently. There's no inverse of that
+  // mapping to go the other way, and a single drag is also just simpler to use.
+  const [pendingRange, setPendingRange] = useState<WaveformRange | null>(null)
   const [confirmError, setConfirmError] = useState<string | null>(null)
+
+  let englishPendingRange: WaveformRange | null = null
+  if (pendingRange) {
+    try {
+      englishPendingRange = {
+        start: englishTimeFor(pendingRange.start, anchors, checkpoints),
+        end: englishTimeFor(pendingRange.end, anchors, checkpoints),
+      }
+    } catch {
+      // Anchors momentarily invalid (e.g. mid-edit) — leave it unset; Confirm stays disabled.
+    }
+  }
 
   // Re-centers the English view on englishTimeFor(cantoViewCenter) whenever the Cantonese view
   // moves — a navigation aid only, never a saved value. Deliberately excludes englishViewStart
@@ -81,15 +97,15 @@ export function WaveformMarking({
   const englishMarkedRanges: WaveformRange[] = segments.map((s) => ({ start: s.englishStart, end: s.englishEnd }))
 
   async function confirmSegment() {
-    if (!cantoPending || !englishPending) return
+    if (!pendingRange || !englishPendingRange) return
     const response = await fetch(`/api/dub-sync/episodes/${episodeId}/segments`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        cantoStart: cantoPending.start,
-        cantoEnd: cantoPending.end,
-        englishStart: englishPending.start,
-        englishEnd: englishPending.end,
+        cantoStart: pendingRange.start,
+        cantoEnd: pendingRange.end,
+        englishStart: englishPendingRange.start,
+        englishEnd: englishPendingRange.end,
       }),
     })
     if (!response.ok) {
@@ -98,8 +114,7 @@ export function WaveformMarking({
     }
     const { segment } = await response.json()
     onSegmentCreated(segment)
-    setCantoPending(null)
-    setEnglishPending(null)
+    setPendingRange(null)
     setConfirmError(null)
   }
 
@@ -132,21 +147,12 @@ export function WaveformMarking({
         viewStartSeconds={cantoViewStart}
         onViewStartChange={setCantoViewStart}
         markedRanges={cantoMarkedRanges}
-        pendingSelection={cantoPending}
-        onSelectionDrafted={(start, end) => setCantoPending({ start, end })}
+        pendingSelection={pendingRange}
+        onSelectionDrafted={(start, end) => setPendingRange({ start, end })}
+        allowDragSelect={true}
         color={CANTO_COLOR}
         playheadSeconds={cantoTimeSeconds}
       />
-      {cantoPending && (
-        <div className="flex gap-2">
-          <button onClick={() => setCantoPending(null)} className="border p-1 rounded" title="Discard this selection">
-            Cancel Cantonese line
-          </button>
-          <span className="text-xs text-gray-500 self-center">
-            {cantoPending.start.toFixed(2)}s – {cantoPending.end.toFixed(2)}s
-          </span>
-        </div>
-      )}
 
       <div className="text-xs text-gray-500 mt-2">English</div>
       <WaveformTrack
@@ -158,27 +164,35 @@ export function WaveformMarking({
         viewStartSeconds={englishViewStart}
         onViewStartChange={setEnglishViewStart}
         markedRanges={englishMarkedRanges}
-        pendingSelection={englishPending}
-        onSelectionDrafted={(start, end) => setEnglishPending({ start, end })}
+        pendingSelection={englishPendingRange}
+        onSelectionDrafted={noop}
+        allowDragSelect={false}
         color={ENGLISH_COLOR}
         playheadSeconds={englishTimeSeconds}
       />
-      {englishPending && (
-        <div className="flex gap-2">
-          <button onClick={() => setEnglishPending(null)} className="border p-1 rounded" title="Discard this selection">
-            Cancel English line
+
+      {pendingRange && (
+        <div className="flex gap-2 items-center">
+          <button onClick={() => setPendingRange(null)} className="border p-1 rounded" title="Discard this selection">
+            Cancel selection
           </button>
-          <span className="text-xs text-gray-500 self-center">
-            {englishPending.start.toFixed(2)}s – {englishPending.end.toFixed(2)}s
+          <span className="text-xs text-gray-500">
+            Canto {pendingRange.start.toFixed(2)}s – {pendingRange.end.toFixed(2)}s
+            {englishPendingRange && (
+              <>
+                {' '}
+                · English {englishPendingRange.start.toFixed(2)}s – {englishPendingRange.end.toFixed(2)}s
+              </>
+            )}
           </span>
         </div>
       )}
 
       <button
         onClick={confirmSegment}
-        disabled={!cantoPending || !englishPending}
+        disabled={!pendingRange || !englishPendingRange}
         className="border p-2 rounded self-start"
-        title="Save both marked lines as one segment"
+        title="Save this range as a segment on both dubs"
       >
         Confirm segment
       </button>
