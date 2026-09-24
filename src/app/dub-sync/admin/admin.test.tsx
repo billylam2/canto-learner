@@ -6,10 +6,19 @@ vi.mock('@/components/dub-sync/youtube-player', () => ({
 }))
 
 vi.mock('./waveform-marking', () => ({
-  WaveformMarking: (props: { cantoPeaks: number[]; englishPeaks: number[] }) => (
+  WaveformMarking: (props: {
+    cantoPeaks: number[]
+    englishPeaks: number[]
+    isPlaying?: boolean
+    cantoTimeSeconds?: number
+    englishTimeSeconds?: number
+  }) => (
     <div data-testid="waveform-marking">
       <span data-testid="canto-peaks">{JSON.stringify(props.cantoPeaks)}</span>
       <span data-testid="english-peaks">{JSON.stringify(props.englishPeaks)}</span>
+      <span data-testid="waveform-is-playing">{String(props.isPlaying)}</span>
+      <span data-testid="waveform-canto-time">{props.cantoTimeSeconds}</span>
+      <span data-testid="waveform-english-time">{props.englishTimeSeconds}</span>
     </div>
   ),
 }))
@@ -745,21 +754,99 @@ describe('Admin waveform marking', () => {
     vi.stubGlobal('fetch', vi.fn())
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('defaults to spacebar marking, and toggles to the waveform panel', () => {
     render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
 
-    expect(screen.getByRole('button', { name: 'Play synced' })).toBeInTheDocument()
     expect(screen.queryByTestId('waveform-marking')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Waveform marking' }))
 
-    expect(screen.queryByRole('button', { name: 'Play synced' })).not.toBeInTheDocument()
     expect(screen.getByTestId('waveform-marking')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Spacebar marking' }))
 
-    expect(screen.getByRole('button', { name: 'Play synced' })).toBeInTheDocument()
     expect(screen.queryByTestId('waveform-marking')).not.toBeInTheDocument()
+  })
+
+  it('disables the Waveform marking toggle until anchors are set', () => {
+    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} />)
+
+    expect(screen.getByRole('button', { name: 'Waveform marking' })).toBeDisabled()
+  })
+
+  it('keeps Play synced, Go to content start, and Resync checkpoint available in waveform marking mode', () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 0)
+    const englishHandle = makeHandle(() => 0)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Waveform marking' }))
+
+    expect(screen.getByRole('button', { name: 'Go to content start' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Resync checkpoint' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+
+    expect(cantoHandle.playVideo).toHaveBeenCalled()
+    expect(englishHandle.playVideo).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Pause synced' })).toBeInTheDocument()
+    expect(screen.getByTestId('waveform-marking')).toBeInTheDocument()
+  })
+
+  it('does not show the spacebar-marking hint while in waveform marking mode', () => {
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Waveform marking' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+
+    expect(screen.queryByText(/Hold SPACE/)).not.toBeInTheDocument()
+  })
+
+  it('does not mark a segment from the space bar while in waveform marking mode', () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 15)
+    const englishHandle = makeHandle(() => 25)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Waveform marking' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+
+    fireEvent.keyDown(window, { code: 'Space' })
+    fireEvent.keyUp(window, { code: 'Space' })
+
+    expect(fetch).not.toHaveBeenCalledWith('/api/dub-sync/episodes/ep-a/segments', expect.anything())
+  })
+
+  it('passes live playback time to the waveform panel only while synced playback is running', () => {
+    vi.useFakeTimers()
+    const refs = captureRefs()
+    let cantoTime = 30
+    let englishTime = 50
+    const cantoHandle = makeHandle(() => cantoTime)
+    const englishHandle = makeHandle(() => englishTime)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    refs.assign(cantoHandle, englishHandle)
+    fireEvent.click(screen.getByRole('button', { name: 'Waveform marking' }))
+
+    expect(screen.getByTestId('waveform-is-playing')).toHaveTextContent('false')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play synced' }))
+    cantoTime = 33
+    englishTime = 53
+    act(() => vi.advanceTimersByTime(200))
+
+    expect(screen.getByTestId('waveform-is-playing')).toHaveTextContent('true')
+    expect(screen.getByTestId('waveform-canto-time')).toHaveTextContent('33')
+    expect(screen.getByTestId('waveform-english-time')).toHaveTextContent('53')
+
+    vi.useRealTimers()
   })
 
   it('generates waveforms and makes the peaks available to the waveform panel', async () => {

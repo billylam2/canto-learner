@@ -7,11 +7,13 @@ vi.mock('./waveform-track', () => ({
     viewStartSeconds: number
     onViewStartChange: (v: number) => void
     onSelectionDrafted: (start: number, end: number) => void
+    playheadSeconds: number | null
   }) => (
     <div>
       <button onClick={() => props.onSelectionDrafted(10, 12)}>{`draft-${props.color}`}</button>
       <button onClick={() => props.onViewStartChange(props.viewStartSeconds + 5)}>{`pan-${props.color}`}</button>
       <div data-testid={`viewstart-${props.color}`}>{props.viewStartSeconds}</div>
+      <div data-testid={`playhead-${props.color}`}>{String(props.playheadSeconds)}</div>
     </div>
   ),
 }))
@@ -115,5 +117,27 @@ describe('WaveformMarking', () => {
 
     const after = Number(screen.getByTestId(`viewstart-${ENGLISH_COLOR}`).textContent)
     expect(after).toBeCloseTo(before + 5, 5)
+  })
+
+  it('passes no playhead to either track while not playing', () => {
+    renderMarking({ isPlaying: false, cantoTimeSeconds: 42, englishTimeSeconds: 52 })
+
+    expect(screen.getByTestId(`playhead-${CANTO_COLOR}`)).toHaveTextContent('null')
+    expect(screen.getByTestId(`playhead-${ENGLISH_COLOR}`)).toHaveTextContent('null')
+  })
+
+  it('passes the live playback time to each track as its playhead while playing', () => {
+    renderMarking({ isPlaying: true, cantoTimeSeconds: 42, englishTimeSeconds: 52 })
+
+    expect(screen.getByTestId(`playhead-${CANTO_COLOR}`)).toHaveTextContent('42')
+    expect(screen.getByTestId(`playhead-${ENGLISH_COLOR}`)).toHaveTextContent('52')
+  })
+
+  it('centers each view on its live playback time while playing', () => {
+    renderMarking({ isPlaying: true, cantoTimeSeconds: 42, englishTimeSeconds: 52 })
+
+    // TRACK_WIDTH=800, pixelsPerSecond=60 -> half window = 6.6667
+    expect(screen.getByTestId(`viewstart-${CANTO_COLOR}`)).toHaveTextContent(/^35\.3/)
+    expect(screen.getByTestId(`viewstart-${ENGLISH_COLOR}`)).toHaveTextContent(/^45\.3/)
   })
 })

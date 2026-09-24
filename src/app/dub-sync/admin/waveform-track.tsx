@@ -19,6 +19,7 @@ export interface WaveformTrackProps {
   pendingSelection: WaveformRange | null
   onSelectionDrafted: (start: number, end: number) => void
   color: string
+  playheadSeconds: number | null
 }
 
 export function WaveformTrack({
@@ -33,6 +34,7 @@ export function WaveformTrack({
   pendingSelection,
   onSelectionDrafted,
   color,
+  playheadSeconds,
 }: WaveformTrackProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [dragStartSeconds, setDragStartSeconds] = useState<number | null>(null)
@@ -88,8 +90,33 @@ export function WaveformTrack({
       ctx.fillStyle = 'rgba(45,108,223,0.25)'
       ctx.fillRect(x1, 0, x2 - x1, height)
     }
+
+    if (playheadSeconds !== null) {
+      const x = (playheadSeconds - viewStartSeconds) * pixelsPerSecond
+      if (x >= 0 && x <= width) {
+        ctx.strokeStyle = '#ef4444'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(x, 0)
+        ctx.lineTo(x, height)
+        ctx.stroke()
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- rangeToPixels closes over props already listed below
-  }, [peaks, bucketMs, width, height, pixelsPerSecond, viewStartSeconds, markedRanges, pendingSelection, dragStartSeconds, dragCurrentSeconds, color])
+  }, [
+    peaks,
+    bucketMs,
+    width,
+    height,
+    pixelsPerSecond,
+    viewStartSeconds,
+    markedRanges,
+    pendingSelection,
+    dragStartSeconds,
+    dragCurrentSeconds,
+    color,
+    playheadSeconds,
+  ])
 
   useEffect(() => {
     if (dragStartSeconds === null) return

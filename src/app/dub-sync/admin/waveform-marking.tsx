@@ -22,6 +22,9 @@ export interface WaveformMarkingProps {
   checkpoints: ResyncCheckpoint[]
   segments: DubSegment[]
   onSegmentCreated: (segment: DubSegment) => void
+  isPlaying?: boolean
+  cantoTimeSeconds?: number
+  englishTimeSeconds?: number
 }
 
 export function WaveformMarking({
@@ -32,6 +35,9 @@ export function WaveformMarking({
   checkpoints,
   segments,
   onSegmentCreated,
+  isPlaying = false,
+  cantoTimeSeconds = 0,
+  englishTimeSeconds = 0,
 }: WaveformMarkingProps) {
   const [pixelsPerSecond, setPixelsPerSecond] = useState(DEFAULT_PIXELS_PER_SECOND)
   const [cantoViewStart, setCantoViewStart] = useState(0)
@@ -44,8 +50,11 @@ export function WaveformMarking({
   // moves — a navigation aid only, never a saved value. Deliberately excludes englishViewStart
   // from its own dependencies, so a manual scroll on the English track (which also calls
   // setEnglishViewStart, via WaveformTrack's onViewStartChange) isn't immediately overwritten —
-  // it only re-syncs the next time the Cantonese view itself changes.
+  // it only re-syncs the next time the Cantonese view itself changes. Skipped entirely while
+  // playing, since the playback-following effect below drives both views directly from live
+  // player position instead (this derived-from-Cantonese estimate would otherwise fight it).
   useEffect(() => {
+    if (isPlaying) return
     const cantoViewCenter = cantoViewStart + TRACK_WIDTH / pixelsPerSecond / 2
     try {
       const englishCenter = englishTimeFor(cantoViewCenter, anchors, checkpoints)
@@ -55,7 +64,18 @@ export function WaveformMarking({
       // Anchors momentarily invalid (e.g. mid-edit) — leave the English view where it is, same
       // defensive handling as computeResyncTarget.
     }
-  }, [cantoViewStart, pixelsPerSecond, anchors, checkpoints])
+  }, [cantoViewStart, pixelsPerSecond, anchors, checkpoints, isPlaying])
+
+  // While playing, keeps both waveforms scrolled so the live playhead line stays roughly
+  // centered — otherwise it runs off the visible ~13-second window within a few seconds of
+  // playback and the marking aid this is meant to provide is lost.
+  useEffect(() => {
+    if (!isPlaying) return
+    const halfWindowSeconds = TRACK_WIDTH / pixelsPerSecond / 2
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- view position tracks the parent's live-polled player time, which can't be computed during render.
+    setCantoViewStart(Math.max(0, cantoTimeSeconds - halfWindowSeconds))
+    setEnglishViewStart(Math.max(0, englishTimeSeconds - halfWindowSeconds))
+  }, [isPlaying, cantoTimeSeconds, englishTimeSeconds, pixelsPerSecond])
 
   const cantoMarkedRanges: WaveformRange[] = segments.map((s) => ({ start: s.cantoStart, end: s.cantoEnd }))
   const englishMarkedRanges: WaveformRange[] = segments.map((s) => ({ start: s.englishStart, end: s.englishEnd }))
@@ -115,6 +135,7 @@ export function WaveformMarking({
         pendingSelection={cantoPending}
         onSelectionDrafted={(start, end) => setCantoPending({ start, end })}
         color={CANTO_COLOR}
+        playheadSeconds={isPlaying ? cantoTimeSeconds : null}
       />
       {cantoPending && (
         <div className="flex gap-2">
@@ -140,6 +161,7 @@ export function WaveformMarking({
         pendingSelection={englishPending}
         onSelectionDrafted={(start, end) => setEnglishPending({ start, end })}
         color={ENGLISH_COLOR}
+        playheadSeconds={isPlaying ? englishTimeSeconds : null}
       />
       {englishPending && (
         <div className="flex gap-2">

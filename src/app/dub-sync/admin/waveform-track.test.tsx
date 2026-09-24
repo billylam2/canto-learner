@@ -6,7 +6,13 @@ function mockCanvas() {
   const ctx = {
     clearRect: vi.fn(),
     fillRect: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    stroke: vi.fn(),
     set fillStyle(_: string) {},
+    set strokeStyle(_: string) {},
+    set lineWidth(_: number) {},
   }
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D)
   vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue({
@@ -35,6 +41,7 @@ const defaultProps = {
   pendingSelection: null,
   onSelectionDrafted: vi.fn(),
   color: '#4ade80',
+  playheadSeconds: null,
 }
 
 describe('WaveformTrack', () => {
@@ -95,5 +102,31 @@ describe('WaveformTrack', () => {
     fireEvent.wheel(canvas, { deltaX: -60, deltaY: 0 }) // would go to -0.5s
 
     expect(onViewStartChange).toHaveBeenCalledWith(0)
+  })
+
+  it('draws a playhead line at the given position', () => {
+    const ctx = mockCanvas()
+    render(<WaveformTrack {...defaultProps} playheadSeconds={2} />)
+
+    // pixelsPerSecond=60, viewStartSeconds=0 -> 2s is x=120
+    expect(ctx.moveTo).toHaveBeenCalledWith(120, 0)
+    expect(ctx.lineTo).toHaveBeenCalledWith(120, 90)
+    expect(ctx.stroke).toHaveBeenCalled()
+  })
+
+  it('does not draw a playhead line when there is none', () => {
+    const ctx = mockCanvas()
+    render(<WaveformTrack {...defaultProps} playheadSeconds={null} />)
+
+    expect(ctx.moveTo).not.toHaveBeenCalled()
+    expect(ctx.stroke).not.toHaveBeenCalled()
+  })
+
+  it('does not draw a playhead line when it is outside the visible view', () => {
+    const ctx = mockCanvas()
+    render(<WaveformTrack {...defaultProps} viewStartSeconds={0} playheadSeconds={50} />)
+
+    expect(ctx.moveTo).not.toHaveBeenCalled()
+    expect(ctx.stroke).not.toHaveBeenCalled()
   })
 })
