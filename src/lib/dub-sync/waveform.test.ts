@@ -53,6 +53,19 @@ describe('extractWaveformPeaks', () => {
     expect(args).toEqual(expect.arrayContaining(['-f', 's16le', '-ar', '8000', '-ac', '1']))
   })
 
+  it('band-passes to the speech frequency range before computing peaks, so background music contributes less', async () => {
+    const child = makeFakeChild()
+    vi.mocked(spawn).mockReturnValue(child as never)
+
+    const promise = extractWaveformPeaks('/tmp/audio.mp3')
+    child.stdout.emit('data', pcmBuffer(Array(400).fill(0)))
+    child.emit('close', 0)
+    await promise
+
+    const args = vi.mocked(spawn).mock.calls[0][1] as string[]
+    expect(args).toEqual(expect.arrayContaining(['-af', 'highpass=f=250,lowpass=f=3500']))
+  })
+
   it('rejects with the captured stderr when ffmpeg exits with a non-zero code', async () => {
     const child = makeFakeChild()
     vi.mocked(spawn).mockReturnValue(child as never)
