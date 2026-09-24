@@ -395,3 +395,58 @@ export async function deleteResyncCheckpoint(supabase: SupabaseClient, checkpoin
     throw new Error(`Failed to delete resync checkpoint ${checkpointId}: ${error.message}`)
   }
 }
+
+export interface DubWaveform {
+  id: string
+  episodeId: string
+  language: 'canto' | 'english'
+  peaks: number[]
+}
+
+interface DubWaveformRow {
+  id: string
+  episode_id: string
+  language: 'canto' | 'english'
+  peaks: number[]
+}
+
+function toDubWaveform(row: DubWaveformRow): DubWaveform {
+  return {
+    id: row.id,
+    episodeId: row.episode_id,
+    language: row.language,
+    peaks: row.peaks,
+  }
+}
+
+export async function listWaveforms(supabase: SupabaseClient, episodeId: string): Promise<DubWaveform[]> {
+  const { data, error } = await supabase.from('dub_sync_waveforms').select('*').eq('episode_id', episodeId)
+
+  if (error) {
+    throw new Error(`Failed to list waveforms for episode ${episodeId}: ${error.message}`)
+  }
+  return ((data ?? []) as DubWaveformRow[]).map(toDubWaveform)
+}
+
+export async function replaceWaveforms(
+  supabase: SupabaseClient,
+  episodeId: string,
+  waveforms: Array<{ language: 'canto' | 'english'; peaks: number[] }>
+): Promise<DubWaveform[]> {
+  const { error: deleteError } = await supabase.from('dub_sync_waveforms').delete().eq('episode_id', episodeId)
+  if (deleteError) {
+    throw new Error(`Failed to replace waveforms for episode ${episodeId}: ${deleteError.message}`)
+  }
+
+  const rows = waveforms.map((waveform) => ({
+    episode_id: episodeId,
+    language: waveform.language,
+    peaks: waveform.peaks,
+  }))
+  const { data, error } = await supabase.from('dub_sync_waveforms').insert(rows).select('*')
+
+  if (error) {
+    throw new Error(`Failed to replace waveforms for episode ${episodeId}: ${error.message}`)
+  }
+  return ((data ?? []) as DubWaveformRow[]).map(toDubWaveform)
+}

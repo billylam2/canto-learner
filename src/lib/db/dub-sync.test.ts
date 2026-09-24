@@ -17,6 +17,8 @@ import {
   createResyncCheckpoint,
   updateResyncCheckpoint,
   deleteResyncCheckpoint,
+  listWaveforms,
+  replaceWaveforms,
 } from './dub-sync'
 
 const episodeRow = {
@@ -478,5 +480,70 @@ describe('deleteResyncCheckpoint', () => {
   it('throws when the delete fails', async () => {
     const supabase = makeDeleteCheckpointMock({ error: { message: 'boom' } })
     await expect(deleteResyncCheckpoint(supabase, 'chk-1')).rejects.toThrow('Failed to delete resync checkpoint chk-1: boom')
+  })
+})
+
+const waveformRow = {
+  id: 'wf-1',
+  episode_id: 'ep-1',
+  language: 'canto',
+  peaks: [0.1, 0.5, 0.9],
+}
+
+function makeListWaveformsMock(overrides: { data: unknown; error: unknown }) {
+  const eq = vi.fn().mockResolvedValue(overrides)
+  const select = vi.fn().mockReturnValue({ eq })
+  const from = vi.fn().mockReturnValue({ select })
+  return { from } as unknown as SupabaseClient
+}
+
+describe('listWaveforms', () => {
+  it('returns waveforms mapped to camelCase', async () => {
+    const supabase = makeListWaveformsMock({ data: [waveformRow], error: null })
+    const result = await listWaveforms(supabase, 'ep-1')
+    expect(result).toEqual([{ id: 'wf-1', episodeId: 'ep-1', language: 'canto', peaks: [0.1, 0.5, 0.9] }])
+  })
+
+  it('throws when the query fails', async () => {
+    const supabase = makeListWaveformsMock({ data: null, error: { message: 'boom' } })
+    await expect(listWaveforms(supabase, 'ep-1')).rejects.toThrow('Failed to list waveforms for episode ep-1: boom')
+  })
+})
+
+function makeReplaceWaveformsMock(overrides: { insertResult: { data: unknown; error: unknown } }) {
+  const deleteEq = vi.fn().mockResolvedValue({ error: null })
+  const del = vi.fn().mockReturnValue({ eq: deleteEq })
+  const insertSelect = vi.fn().mockResolvedValue(overrides.insertResult)
+  const insert = vi.fn().mockReturnValue({ select: insertSelect })
+  const from = vi.fn().mockReturnValue({ delete: del, insert })
+  return { from, del, deleteEq, insert } as unknown as SupabaseClient & {
+    del: typeof del
+    deleteEq: typeof deleteEq
+    insert: typeof insert
+  }
+}
+
+describe('replaceWaveforms', () => {
+  it('deletes existing waveforms for the episode, then bulk-inserts the new ones', async () => {
+    const supabase = makeReplaceWaveformsMock({
+      insertResult: {
+        data: [waveformRow, { ...waveformRow, id: 'wf-2', language: 'english', peaks: [0.2, 0.4] }],
+        error: null,
+      },
+    })
+    const result = await replaceWaveforms(supabase, 'ep-1', [
+      { language: 'canto', peaks: [0.1, 0.5, 0.9] },
+      { language: 'english', peaks: [0.2, 0.4] },
+    ])
+    expect(supabase.deleteEq).toHaveBeenCalledWith('episode_id', 'ep-1')
+    expect(result).toHaveLength(2)
+    expect(result[1].language).toBe('english')
+  })
+
+  it('throws when the insert fails', async () => {
+    const supabase = makeReplaceWaveformsMock({ insertResult: { data: null, error: { message: 'boom' } } })
+    await expect(
+      replaceWaveforms(supabase, 'ep-1', [{ language: 'canto', peaks: [0.1] }])
+    ).rejects.toThrow('Failed to replace waveforms for episode ep-1: boom')
   })
 })
