@@ -5,6 +5,15 @@ vi.mock('@/components/dub-sync/youtube-player', () => ({
   YoutubePlayer: vi.fn(({ elementId }: { elementId: string }) => <div data-testid={`player-${elementId}`} />),
 }))
 
+vi.mock('./waveform-marking', () => ({
+  WaveformMarking: (props: { cantoPeaks: number[]; englishPeaks: number[] }) => (
+    <div data-testid="waveform-marking">
+      <span data-testid="canto-peaks">{JSON.stringify(props.cantoPeaks)}</span>
+      <span data-testid="english-peaks">{JSON.stringify(props.englishPeaks)}</span>
+    </div>
+  ),
+}))
+
 import { Admin } from './admin'
 import { YoutubePlayer } from '@/components/dub-sync/youtube-player'
 
@@ -719,6 +728,80 @@ describe('Admin resync checkpoints', () => {
 
     expect(fetch).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Play synced' })).toBeInTheDocument()
+  })
+})
+
+describe('Admin waveform marking', () => {
+  const episodeWithAnchors = {
+    ...episodeA,
+    cantoContentStart: 10,
+    cantoContentEnd: 110,
+    englishContentStart: 20,
+    englishContentEnd: 220,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  it('defaults to spacebar marking, and toggles to the waveform panel', () => {
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+
+    expect(screen.getByRole('button', { name: 'Play synced' })).toBeInTheDocument()
+    expect(screen.queryByTestId('waveform-marking')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Waveform marking' }))
+
+    expect(screen.queryByRole('button', { name: 'Play synced' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('waveform-marking')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Spacebar marking' }))
+
+    expect(screen.getByRole('button', { name: 'Play synced' })).toBeInTheDocument()
+    expect(screen.queryByTestId('waveform-marking')).not.toBeInTheDocument()
+  })
+
+  it('generates waveforms and makes the peaks available to the waveform panel', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          waveforms: [
+            { id: 'wf-1', episodeId: 'ep-a', language: 'canto', peaks: [0.1, 0.2] },
+            { id: 'wf-2', episodeId: 'ep-a', language: 'english', peaks: [0.3, 0.4] },
+          ],
+        }),
+    } as Response)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Generate waveforms' }))
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a/waveforms',
+        expect.objectContaining({ method: 'POST' })
+      )
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Waveform marking' }))
+
+    await waitFor(() => expect(screen.getByTestId('canto-peaks')).toHaveTextContent('[0.1,0.2]'))
+    expect(screen.getByTestId('english-peaks')).toHaveTextContent('[0.3,0.4]')
+  })
+
+  it('shows an error message when generating waveforms fails', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      json: () => Promise.resolve({ error: 'Cantonese audio (canto-a) failed: yt-dlp exited with code 1' }),
+    } as Response)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Generate waveforms' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Cantonese audio (canto-a) failed: yt-dlp exited with code 1')
+    )
   })
 })
 

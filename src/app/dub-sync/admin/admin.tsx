@@ -2,19 +2,21 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { YoutubePlayer, type YoutubePlayerHandle } from '@/components/dub-sync/youtube-player'
-import type { DubEpisode, DubSegment, DubResyncCheckpoint } from '@/lib/db/dub-sync'
+import type { DubEpisode, DubSegment, DubResyncCheckpoint, DubWaveform } from '@/lib/db/dub-sync'
 import { englishTimeFor, type EpisodeAnchors, type ResyncCheckpoint } from '@/lib/dub-sync/normalize'
 import { computeResyncTarget } from '@/lib/dub-sync/synced-playback'
 import { SegmentPlaybackController } from '@/lib/dub-sync/player-controller'
 import { NewEpisodeForm } from './new-episode-form'
 import { SegmentTable } from './segment-table'
 import { CheckpointTable } from './checkpoint-table'
+import { WaveformMarking } from './waveform-marking'
 import { AnchorFields } from './anchor-fields'
 
 interface AdminProps {
   episodes: DubEpisode[]
   segmentsByEpisode: Record<string, DubSegment[]>
   checkpointsByEpisode?: Record<string, DubResyncCheckpoint[]>
+  waveformsByEpisode?: Record<string, DubWaveform[]>
 }
 
 function hasAllAnchors(episode: DubEpisode): episode is DubEpisode & EpisodeAnchors {
@@ -30,10 +32,12 @@ export function Admin({
   episodes: initialEpisodes,
   segmentsByEpisode: initialSegments,
   checkpointsByEpisode: initialCheckpoints = {},
+  waveformsByEpisode: initialWaveforms = {},
 }: AdminProps) {
   const [episodes, setEpisodes] = useState(initialEpisodes)
   const [segmentsByEpisode, setSegmentsByEpisode] = useState(initialSegments)
   const [checkpointsByEpisode, setCheckpointsByEpisode] = useState(initialCheckpoints)
+  const [waveformsByEpisode, setWaveformsByEpisode] = useState(initialWaveforms)
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(initialEpisodes[0]?.id ?? null)
 
   const cantoPlayerRef = useRef<YoutubePlayerHandle>(null)
@@ -70,6 +74,33 @@ export function Admin({
 
   function updateEpisodeInPlace(updated: DubEpisode) {
     setEpisodes((current) => current.map((candidate) => (candidate.id === updated.id ? updated : candidate)))
+  }
+
+  const [markingMode, setMarkingMode] = useState<'spacebar' | 'waveform'>('spacebar')
+
+  function appendSegment(segment: DubSegment) {
+    if (!selectedEpisodeId) return
+    setSegmentsByEpisode((current) => ({
+      ...current,
+      [selectedEpisodeId]: [...(current[selectedEpisodeId] ?? []), segment],
+    }))
+  }
+
+  const [generatingWaveforms, setGeneratingWaveforms] = useState(false)
+  const [waveformsError, setWaveformsError] = useState<string | null>(null)
+
+  async function runGenerateWaveforms() {
+    if (!episode) return
+    setGeneratingWaveforms(true)
+    setWaveformsError(null)
+    const response = await fetch(`/api/dub-sync/episodes/${episode.id}/waveforms`, { method: 'POST' })
+    setGeneratingWaveforms(false)
+    const body = await response.json()
+    if (!response.ok) {
+      setWaveformsError(body.error ?? 'Failed to generate waveforms')
+      return
+    }
+    setWaveformsByEpisode((current) => ({ ...current, [episode.id]: body.waveforms }))
   }
 
   // Resets the draft whenever the selected episode's title changes — either from switching
@@ -733,98 +764,146 @@ export function Admin({
 
             <div className="flex gap-2 mb-4">
               <button
-                onClick={() => (syncing ? stopSyncedPlayback() : startSyncedPlayback())}
-                disabled={!anchorsSet}
-                className="border p-2 rounded"
-                title="Play both videos together, auto-correcting English position to stay in sync"
+                onClick={() => setMarkingMode('spacebar')}
+                className={`border p-2 rounded ${markingMode === 'spacebar' ? 'bg-gray-800 text-white' : ''}`}
+                title="Mark segments by holding SPACE during synced playback"
               >
-                {syncing ? 'Pause synced' : 'Play synced'}
+                Spacebar marking
               </button>
               <button
-                onClick={goToContentStart}
-                disabled={!anchorsSet}
-                className="border p-2 rounded"
-                title="Jump both videos to their marked content start and begin synced playback"
+                onClick={() => setMarkingMode('waveform')}
+                className={`border p-2 rounded ${markingMode === 'waveform' ? 'bg-gray-800 text-white' : ''}`}
+                title="Mark segments by dragging over each dub's audio waveform"
               >
-                Go to content start
+                Waveform marking
               </button>
               <button
-                onClick={enterCheckpointAdjustment}
-                disabled={!syncing}
+                onClick={runGenerateWaveforms}
+                disabled={generatingWaveforms}
                 className="border p-2 rounded"
-                title="Pause and manually correct the English position to fix drift from here onward"
+                title="Download both videos' audio and compute waveform previews for waveform marking"
               >
-                Resync checkpoint
+                {generatingWaveforms ? 'Generating…' : 'Generate waveforms'}
               </button>
             </div>
 
-            {syncing && !adjustingCheckpoint && (
-              <p className="text-gray-500 mb-4">Hold SPACE while a character is speaking, release when they stop.</p>
+            {waveformsError && (
+              <p role="alert" className="text-red-600 mb-4">
+                {waveformsError}
+              </p>
             )}
 
-            {adjustingCheckpoint && (
-              <div className="border p-2 rounded mb-4 flex flex-col gap-2">
-                <p className="text-gray-500">Nudge the English video to match, then confirm.</p>
-                <div className="flex gap-2">
+            {markingMode === 'spacebar' && (
+              <>
+                <div className="flex gap-2 mb-4">
                   <button
-                    onClick={() => nudgeEnglish(-0.5)}
-                    className="border p-1 rounded"
-                    title="Shift the English video back by 0.5s"
+                    onClick={() => (syncing ? stopSyncedPlayback() : startSyncedPlayback())}
+                    disabled={!anchorsSet}
+                    className="border p-2 rounded"
+                    title="Play both videos together, auto-correcting English position to stay in sync"
                   >
-                    -0.5s
+                    {syncing ? 'Pause synced' : 'Play synced'}
                   </button>
                   <button
-                    onClick={() => nudgeEnglish(-0.1)}
-                    className="border p-1 rounded"
-                    title="Shift the English video back by 0.1s"
+                    onClick={goToContentStart}
+                    disabled={!anchorsSet}
+                    className="border p-2 rounded"
+                    title="Jump both videos to their marked content start and begin synced playback"
                   >
-                    -0.1s
+                    Go to content start
                   </button>
                   <button
-                    onClick={() => nudgeEnglish(0.1)}
-                    className="border p-1 rounded"
-                    title="Shift the English video forward by 0.1s"
+                    onClick={enterCheckpointAdjustment}
+                    disabled={!syncing}
+                    className="border p-2 rounded"
+                    title="Pause and manually correct the English position to fix drift from here onward"
                   >
-                    +0.1s
-                  </button>
-                  <button
-                    onClick={() => nudgeEnglish(0.5)}
-                    className="border p-1 rounded"
-                    title="Shift the English video forward by 0.5s"
-                  >
-                    +0.5s
-                  </button>
-                  <button
-                    onClick={previewPlay}
-                    className="border p-1 rounded"
-                    title="Play both videos from their current position to check alignment"
-                  >
-                    Preview play
-                  </button>
-                  <button onClick={previewPause} className="border p-1 rounded" title="Pause both videos">
-                    Preview pause
-                  </button>
-                  <button
-                    onClick={confirmCheckpoint}
-                    className="border p-1 rounded"
-                    title="Save this correction as a resync checkpoint"
-                  >
-                    Confirm
-                  </button>
-                  <button
-                    onClick={cancelCheckpointAdjustment}
-                    className="border p-1 rounded"
-                    title="Discard this correction without saving"
-                  >
-                    Cancel
+                    Resync checkpoint
                   </button>
                 </div>
-                {checkpointError && (
-                  <p role="alert" className="text-red-600">
-                    {checkpointError}
-                  </p>
+
+                {syncing && !adjustingCheckpoint && (
+                  <p className="text-gray-500 mb-4">Hold SPACE while a character is speaking, release when they stop.</p>
                 )}
-              </div>
+
+                {adjustingCheckpoint && (
+                  <div className="border p-2 rounded mb-4 flex flex-col gap-2">
+                    <p className="text-gray-500">Nudge the English video to match, then confirm.</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => nudgeEnglish(-0.5)}
+                        className="border p-1 rounded"
+                        title="Shift the English video back by 0.5s"
+                      >
+                        -0.5s
+                      </button>
+                      <button
+                        onClick={() => nudgeEnglish(-0.1)}
+                        className="border p-1 rounded"
+                        title="Shift the English video back by 0.1s"
+                      >
+                        -0.1s
+                      </button>
+                      <button
+                        onClick={() => nudgeEnglish(0.1)}
+                        className="border p-1 rounded"
+                        title="Shift the English video forward by 0.1s"
+                      >
+                        +0.1s
+                      </button>
+                      <button
+                        onClick={() => nudgeEnglish(0.5)}
+                        className="border p-1 rounded"
+                        title="Shift the English video forward by 0.5s"
+                      >
+                        +0.5s
+                      </button>
+                      <button
+                        onClick={previewPlay}
+                        className="border p-1 rounded"
+                        title="Play both videos from their current position to check alignment"
+                      >
+                        Preview play
+                      </button>
+                      <button onClick={previewPause} className="border p-1 rounded" title="Pause both videos">
+                        Preview pause
+                      </button>
+                      <button
+                        onClick={confirmCheckpoint}
+                        className="border p-1 rounded"
+                        title="Save this correction as a resync checkpoint"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={cancelCheckpointAdjustment}
+                        className="border p-1 rounded"
+                        title="Discard this correction without saving"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    {checkpointError && (
+                      <p role="alert" className="text-red-600">
+                        {checkpointError}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            {markingMode === 'waveform' && anchorsSet && (
+              <WaveformMarking
+                key={episode.id}
+                episodeId={episode.id}
+                cantoPeaks={waveformsByEpisode[episode.id]?.find((w) => w.language === 'canto')?.peaks ?? []}
+                englishPeaks={waveformsByEpisode[episode.id]?.find((w) => w.language === 'english')?.peaks ?? []}
+                anchors={episode as DubEpisode & EpisodeAnchors}
+                checkpoints={checkpoints}
+                segments={segments}
+                onSegmentCreated={appendSegment}
+              />
             )}
 
             {captionsError && (
