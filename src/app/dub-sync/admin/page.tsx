@@ -5,8 +5,10 @@ import {
   listEpisodes,
   listSegments,
   listResyncCheckpoints,
+  listWaveforms,
   type DubSegment,
   type DubResyncCheckpoint,
+  type DubWaveform,
 } from '@/lib/db/dub-sync'
 import { readAdminSessionFromCookieValue, ADMIN_COOKIE_NAME } from '@/lib/auth/admin-session'
 import { Admin } from './admin'
@@ -23,10 +25,19 @@ export default async function DubSyncAdminPage() {
 
   const segmentsByEpisode: Record<string, DubSegment[]> = {}
   const checkpointsByEpisode: Record<string, DubResyncCheckpoint[]> = {}
+  const waveformsByEpisode: Record<string, DubWaveform[]> = {}
   for (const episode of episodes) {
     segmentsByEpisode[episode.id] = await listSegments(supabase, episode.id)
     checkpointsByEpisode[episode.id] = await listResyncCheckpoints(supabase, episode.id)
+    waveformsByEpisode[episode.id] = await listWaveforms(supabase, episode.id)
   }
 
-  return <Admin episodes={episodes} segmentsByEpisode={segmentsByEpisode} checkpointsByEpisode={checkpointsByEpisode} />
+  return (
+    <Admin
+      episodes={episodes}
+      segmentsByEpisode={segmentsByEpisode}
+      checkpointsByEpisode={checkpointsByEpisode}
+      waveformsByEpisode={waveformsByEpisode}
+    />
+  )
 }
