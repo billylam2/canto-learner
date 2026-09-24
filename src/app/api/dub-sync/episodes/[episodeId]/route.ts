@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/client'
-import { updateEpisodeAnchors, updateEpisodeTitle } from '@/lib/db/dub-sync'
+import {
+  updateEpisodeAnchors,
+  updateEpisodeTitle,
+  updateEpisodeVideoIds,
+  deleteEpisode,
+  type UpdateEpisodeVideoIdsInput,
+} from '@/lib/db/dub-sync'
 import { readAdminSession } from '@/lib/auth/admin-session'
 
 export async function PATCH(
@@ -18,6 +24,15 @@ export async function PATCH(
   if (typeof body?.title === 'string') {
     const supabase = createSupabaseServerClient()
     const episode = await updateEpisodeTitle(supabase, episodeId, body.title)
+    return NextResponse.json({ episode })
+  }
+
+  if (typeof body?.cantoneseVideoId === 'string' || typeof body?.englishVideoId === 'string') {
+    const patch: UpdateEpisodeVideoIdsInput = {}
+    if (typeof body?.cantoneseVideoId === 'string') patch.cantoneseVideoId = body.cantoneseVideoId
+    if (typeof body?.englishVideoId === 'string') patch.englishVideoId = body.englishVideoId
+    const supabase = createSupabaseServerClient()
+    const episode = await updateEpisodeVideoIds(supabase, episodeId, patch)
     return NextResponse.json({ episode })
   }
 
@@ -46,4 +61,19 @@ export async function PATCH(
     englishContentEnd,
   })
   return NextResponse.json({ episode })
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ episodeId: string }> }
+): Promise<NextResponse> {
+  const session = await readAdminSession(request)
+  if (!session) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  }
+
+  const { episodeId } = await params
+  const supabase = createSupabaseServerClient()
+  await deleteEpisode(supabase, episodeId)
+  return NextResponse.json({ ok: true })
 }

@@ -9,10 +9,12 @@ vi.mock('@/lib/supabase/client', () => ({
 vi.mock('@/lib/db/dub-sync', () => ({
   updateEpisodeAnchors: vi.fn(),
   updateEpisodeTitle: vi.fn(),
+  updateEpisodeVideoIds: vi.fn(),
+  deleteEpisode: vi.fn(),
 }))
 
-import { PATCH } from './route'
-import { updateEpisodeAnchors, updateEpisodeTitle } from '@/lib/db/dub-sync'
+import { PATCH, DELETE } from './route'
+import { updateEpisodeAnchors, updateEpisodeTitle, updateEpisodeVideoIds, deleteEpisode } from '@/lib/db/dub-sync'
 
 async function adminCookieHeader(): Promise<string> {
   process.env.SESSION_SECRET = 'a'.repeat(32)
@@ -87,6 +89,49 @@ describe('PATCH /api/dub-sync/episodes/[episodeId]', () => {
     expect(updateEpisodeAnchors).not.toHaveBeenCalled()
   })
 
+  it('updates the episode video IDs instead of anchors when they are given', async () => {
+    vi.mocked(updateEpisodeVideoIds).mockResolvedValue({
+      id: 'ep-1',
+      title: 'Muddy Puddles',
+      cantoneseVideoId: 'new-canto-id',
+      englishVideoId: 'eng-456',
+      cantoContentStart: null,
+      cantoContentEnd: null,
+      englishContentStart: null,
+      englishContentEnd: null,
+    })
+
+    const response = await PATCH(await makeRequest({ cantoneseVideoId: 'new-canto-id' }), {
+      params: Promise.resolve({ episodeId: 'ep-1' }),
+    })
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.episode.cantoneseVideoId).toBe('new-canto-id')
+    expect(updateEpisodeVideoIds).toHaveBeenCalledWith(expect.anything(), 'ep-1', { cantoneseVideoId: 'new-canto-id' })
+    expect(updateEpisodeAnchors).not.toHaveBeenCalled()
+  })
+
+  it('updates only englishVideoId when only that field is given', async () => {
+    vi.mocked(updateEpisodeVideoIds).mockResolvedValue({
+      id: 'ep-1',
+      title: 'Muddy Puddles',
+      cantoneseVideoId: 'canto-123',
+      englishVideoId: 'new-eng-id',
+      cantoContentStart: null,
+      cantoContentEnd: null,
+      englishContentStart: null,
+      englishContentEnd: null,
+    })
+
+    const response = await PATCH(await makeRequest({ englishVideoId: 'new-eng-id' }), {
+      params: Promise.resolve({ episodeId: 'ep-1' }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(updateEpisodeVideoIds).toHaveBeenCalledWith(expect.anything(), 'ep-1', { englishVideoId: 'new-eng-id' })
+  })
+
   it('rejects an unauthenticated request', async () => {
     const request = new NextRequest('http://localhost/api/dub-sync/episodes/ep-1', {
       method: 'PATCH',
@@ -94,6 +139,26 @@ describe('PATCH /api/dub-sync/episodes/[episodeId]', () => {
       headers: { 'content-type': 'application/json' },
     })
     const response = await PATCH(request, { params: Promise.resolve({ episodeId: 'ep-1' }) })
+    expect(response.status).toBe(401)
+  })
+})
+
+describe('DELETE /api/dub-sync/episodes/[episodeId]', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('deletes the episode', async () => {
+    const request = new NextRequest('http://localhost/api/dub-sync/episodes/ep-1', {
+      method: 'DELETE',
+      headers: { cookie: await adminCookieHeader() },
+    })
+    const response = await DELETE(request, { params: Promise.resolve({ episodeId: 'ep-1' }) })
+    expect(response.status).toBe(200)
+    expect(deleteEpisode).toHaveBeenCalledWith(expect.anything(), 'ep-1')
+  })
+
+  it('rejects an unauthenticated DELETE', async () => {
+    const request = new NextRequest('http://localhost/api/dub-sync/episodes/ep-1', { method: 'DELETE' })
+    const response = await DELETE(request, { params: Promise.resolve({ episodeId: 'ep-1' }) })
     expect(response.status).toBe(401)
   })
 })
