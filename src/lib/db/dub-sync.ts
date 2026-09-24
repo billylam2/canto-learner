@@ -109,6 +109,40 @@ export async function updateEpisodeTitle(
   return toDubEpisode(data as DubEpisodeRow)
 }
 
+export interface UpdateEpisodeVideoIdsInput {
+  cantoneseVideoId?: string
+  englishVideoId?: string
+}
+
+export async function updateEpisodeVideoIds(
+  supabase: SupabaseClient,
+  episodeId: string,
+  patch: UpdateEpisodeVideoIdsInput
+): Promise<DubEpisode> {
+  const updates: Record<string, unknown> = {}
+  if (patch.cantoneseVideoId !== undefined) updates.cantonese_video_id = patch.cantoneseVideoId
+  if (patch.englishVideoId !== undefined) updates.english_video_id = patch.englishVideoId
+
+  const { data, error } = await supabase
+    .from('dub_episodes')
+    .update(updates)
+    .eq('id', episodeId)
+    .select('*')
+    .single()
+
+  if (error || !data) {
+    throw new Error(`Failed to update video IDs for episode ${episodeId}: ${error?.message ?? 'unknown error'}`)
+  }
+  return toDubEpisode(data as DubEpisodeRow)
+}
+
+export async function deleteEpisode(supabase: SupabaseClient, episodeId: string): Promise<void> {
+  const { error } = await supabase.from('dub_episodes').delete().eq('id', episodeId)
+  if (error) {
+    throw new Error(`Failed to delete episode ${episodeId}: ${error.message}`)
+  }
+}
+
 export interface DubSegment {
   id: string
   episodeId: string

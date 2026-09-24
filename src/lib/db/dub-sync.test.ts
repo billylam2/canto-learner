@@ -6,6 +6,8 @@ import {
   getEpisode,
   updateEpisodeAnchors,
   updateEpisodeTitle,
+  updateEpisodeVideoIds,
+  deleteEpisode,
   createSegment,
   createSegmentsBulk,
   listSegments,
@@ -175,6 +177,42 @@ describe('updateEpisodeTitle', () => {
     await expect(updateEpisodeTitle(supabase, 'ep-1', 'New Title')).rejects.toThrow(
       'Failed to update title for episode ep-1: boom'
     )
+  })
+})
+
+describe('updateEpisodeVideoIds', () => {
+  it('updates only the provided video id fields', async () => {
+    const supabase = makeSingleMock({
+      single: { data: { ...episodeRow, cantonese_video_id: 'new-canto' }, error: null },
+    })
+    const result = await updateEpisodeVideoIds(supabase, 'ep-1', { cantoneseVideoId: 'new-canto' })
+    expect(result.cantoneseVideoId).toBe('new-canto')
+  })
+
+  it('throws when the update fails', async () => {
+    const supabase = makeSingleMock({ single: { data: null, error: { message: 'boom' } } })
+    await expect(updateEpisodeVideoIds(supabase, 'ep-1', { cantoneseVideoId: 'new-canto' })).rejects.toThrow(
+      'Failed to update video IDs for episode ep-1: boom'
+    )
+  })
+})
+
+function makeDeleteEpisodeMock(overrides: { error: unknown }) {
+  const eq = vi.fn().mockResolvedValue(overrides)
+  const del = vi.fn().mockReturnValue({ eq })
+  const from = vi.fn().mockReturnValue({ delete: del })
+  return { from } as unknown as SupabaseClient
+}
+
+describe('deleteEpisode', () => {
+  it('resolves when the delete succeeds', async () => {
+    const supabase = makeDeleteEpisodeMock({ error: null })
+    await expect(deleteEpisode(supabase, 'ep-1')).resolves.toBeUndefined()
+  })
+
+  it('throws when the delete fails', async () => {
+    const supabase = makeDeleteEpisodeMock({ error: { message: 'boom' } })
+    await expect(deleteEpisode(supabase, 'ep-1')).rejects.toThrow('Failed to delete episode ep-1: boom')
   })
 })
 
