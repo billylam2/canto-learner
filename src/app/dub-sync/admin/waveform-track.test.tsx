@@ -81,27 +81,14 @@ describe('WaveformTrack', () => {
     expect(onSelectionDrafted).not.toHaveBeenCalled()
   })
 
-  it('reports a panned view start on horizontal scroll', () => {
+  it('does not pan on scroll/wheel — trackpad horizontal scroll panned too aggressively, so panning is button-only now', () => {
     const onViewStartChange = vi.fn()
     const { container } = render(<WaveformTrack {...defaultProps} onViewStartChange={onViewStartChange} />)
     const canvas = container.querySelector('canvas')!
 
-    // pixelsPerSecond=60, so a 60px deltaX pans by 1 second.
     fireEvent.wheel(canvas, { deltaX: 60, deltaY: 0 })
 
-    expect(onViewStartChange).toHaveBeenCalledWith(1)
-  })
-
-  it('does not pan before the start of the track', () => {
-    const onViewStartChange = vi.fn()
-    const { container } = render(
-      <WaveformTrack {...defaultProps} viewStartSeconds={0.5} onViewStartChange={onViewStartChange} />
-    )
-    const canvas = container.querySelector('canvas')!
-
-    fireEvent.wheel(canvas, { deltaX: -60, deltaY: 0 }) // would go to -0.5s
-
-    expect(onViewStartChange).toHaveBeenCalledWith(0)
+    expect(onViewStartChange).not.toHaveBeenCalled()
   })
 
   it('draws a playhead line at the given position', () => {

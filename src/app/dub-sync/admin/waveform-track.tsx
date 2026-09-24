@@ -149,22 +149,6 @@ export function WaveformTrack({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- secondsAtClientX closes over viewStartSeconds/pixelsPerSecond
   }, [dragStartSeconds, dragCurrentSeconds, onSelectionDrafted])
 
-  // React's onWheel prop is registered as a passive listener, so calling event.preventDefault()
-  // from it is silently ignored — that let a trackpad's horizontal scroll bubble up as the
-  // browser's own swipe-navigation gesture (back/forward) instead of just panning the track. A
-  // native, explicitly non-passive listener is the only way to actually suppress that.
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    function handleWheel(event: WheelEvent) {
-      event.preventDefault()
-      const delta = event.deltaX !== 0 ? event.deltaX : event.deltaY
-      onViewStartChange(Math.max(0, viewStartSeconds + delta / pixelsPerSecond))
-    }
-    canvas.addEventListener('wheel', handleWheel, { passive: false })
-    return () => canvas.removeEventListener('wheel', handleWheel)
-  }, [viewStartSeconds, pixelsPerSecond, onViewStartChange])
-
   return (
     <div className="flex items-center gap-1">
       <button
