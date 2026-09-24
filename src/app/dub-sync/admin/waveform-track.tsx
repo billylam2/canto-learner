@@ -45,6 +45,10 @@ export function WaveformTrack({
     return viewStartSeconds + (clientX - rect.left) / pixelsPerSecond
   }
 
+  // A whole visible window's worth of seconds, times a fraction, so each button press moves a
+  // consistent proportion of what's on screen regardless of the current zoom level.
+  const panStepSeconds = (width / pixelsPerSecond) * 0.2
+
   function rangeToPixels(range: WaveformRange): { x1: number; x2: number } {
     return {
       x1: (range.start - viewStartSeconds) * pixelsPerSecond,
@@ -145,21 +149,53 @@ export function WaveformTrack({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- secondsAtClientX closes over viewStartSeconds/pixelsPerSecond
   }, [dragStartSeconds, dragCurrentSeconds, onSelectionDrafted])
 
+  // React's onWheel prop is registered as a passive listener, so calling event.preventDefault()
+  // from it is silently ignored — that let a trackpad's horizontal scroll bubble up as the
+  // browser's own swipe-navigation gesture (back/forward) instead of just panning the track. A
+  // native, explicitly non-passive listener is the only way to actually suppress that.
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    function handleWheel(event: WheelEvent) {
+      event.preventDefault()
+      const delta = event.deltaX !== 0 ? event.deltaX : event.deltaY
+      onViewStartChange(Math.max(0, viewStartSeconds + delta / pixelsPerSecond))
+    }
+    canvas.addEventListener('wheel', handleWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', handleWheel)
+  }, [viewStartSeconds, pixelsPerSecond, onViewStartChange])
+
   return (
-    <canvas
-      ref={canvasRef}
-      width={width}
-      height={height}
-      onMouseDown={(event) => {
-        const seconds = secondsAtClientX(event.clientX)
-        setDragStartSeconds(seconds)
-        setDragCurrentSeconds(seconds)
-      }}
-      onWheel={(event) => {
-        event.preventDefault()
-        const delta = event.deltaX !== 0 ? event.deltaX : event.deltaY
-        onViewStartChange(Math.max(0, viewStartSeconds + delta / pixelsPerSecond))
-      }}
-    />
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onViewStartChange(Math.max(0, viewStartSeconds - panStepSeconds))}
+        className="border p-1 rounded shrink-0"
+        title="Scroll the waveform left"
+      >
+        ◀
+      </button>
+      {/* self-start + shrink-0: without them this canvas, as a flex-column child, gets stretched
+          to the container's width by the default align-items: stretch — leaving its 800x90
+          drawing buffer rendered into a visibly larger box, which throws off every click's
+          computed time by exactly that stretch ratio. */}
+      <canvas
+        ref={canvasRef}
+        width={width}
+        height={height}
+        className="self-start shrink-0"
+        onMouseDown={(event) => {
+          const seconds = secondsAtClientX(event.clientX)
+          setDragStartSeconds(seconds)
+          setDragCurrentSeconds(seconds)
+        }}
+      />
+      <button
+        onClick={() => onViewStartChange(viewStartSeconds + panStepSeconds)}
+        className="border p-1 rounded shrink-0"
+        title="Scroll the waveform right"
+      >
+        ▶
+      </button>
+    </div>
   )
 }

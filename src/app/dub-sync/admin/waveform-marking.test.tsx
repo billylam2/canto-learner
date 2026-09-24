@@ -119,11 +119,11 @@ describe('WaveformMarking', () => {
     expect(after).toBeCloseTo(before + 5, 5)
   })
 
-  it('passes no playhead to either track while not playing', () => {
+  it('passes the last-known playback time to each track as its playhead while paused, so it stays visible after pausing', () => {
     renderMarking({ isPlaying: false, cantoTimeSeconds: 42, englishTimeSeconds: 52 })
 
-    expect(screen.getByTestId(`playhead-${CANTO_COLOR}`)).toHaveTextContent('null')
-    expect(screen.getByTestId(`playhead-${ENGLISH_COLOR}`)).toHaveTextContent('null')
+    expect(screen.getByTestId(`playhead-${CANTO_COLOR}`)).toHaveTextContent('42')
+    expect(screen.getByTestId(`playhead-${ENGLISH_COLOR}`)).toHaveTextContent('52')
   })
 
   it('passes the live playback time to each track as its playhead while playing', () => {

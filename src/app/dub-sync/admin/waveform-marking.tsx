@@ -135,7 +135,7 @@ export function WaveformMarking({
         pendingSelection={cantoPending}
         onSelectionDrafted={(start, end) => setCantoPending({ start, end })}
         color={CANTO_COLOR}
-        playheadSeconds={isPlaying ? cantoTimeSeconds : null}
+        playheadSeconds={cantoTimeSeconds}
       />
       {cantoPending && (
         <div className="flex gap-2">
@@ -161,7 +161,7 @@ export function WaveformMarking({
         pendingSelection={englishPending}
         onSelectionDrafted={(start, end) => setEnglishPending({ start, end })}
         color={ENGLISH_COLOR}
-        playheadSeconds={isPlaying ? englishTimeSeconds : null}
+        playheadSeconds={englishTimeSeconds}
       />
       {englishPending && (
         <div className="flex gap-2">

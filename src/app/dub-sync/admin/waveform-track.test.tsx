@@ -129,4 +129,46 @@ describe('WaveformTrack', () => {
     expect(ctx.moveTo).not.toHaveBeenCalled()
     expect(ctx.stroke).not.toHaveBeenCalled()
   })
+
+  it("keeps the canvas at its intrinsic pixel size instead of stretching to fill a flex parent", () => {
+    // Regression test: this canvas sits in a flex-column container, whose default
+    // align-items: stretch otherwise blows the canvas's rendered CSS size up past its 800x90
+    // drawing buffer — which silently desyncs every click's computed time from the pointer.
+    const { container } = render(<WaveformTrack {...defaultProps} />)
+    const canvas = container.querySelector('canvas')!
+
+    expect(canvas.className).toContain('self-start')
+  })
+
+  it('pans right by a fifth of the visible window when the right button is clicked', () => {
+    const onViewStartChange = vi.fn()
+    const { getByTitle } = render(<WaveformTrack {...defaultProps} onViewStartChange={onViewStartChange} />)
+
+    fireEvent.click(getByTitle('Scroll the waveform right'))
+
+    // visible window = 800/60 = 13.3333s; a fifth of that is 2.6667s
+    expect(onViewStartChange).toHaveBeenCalledWith(expect.closeTo(2.6667, 3))
+  })
+
+  it('pans left by a fifth of the visible window when the left button is clicked', () => {
+    const onViewStartChange = vi.fn()
+    const { getByTitle } = render(
+      <WaveformTrack {...defaultProps} viewStartSeconds={10} onViewStartChange={onViewStartChange} />
+    )
+
+    fireEvent.click(getByTitle('Scroll the waveform left'))
+
+    expect(onViewStartChange).toHaveBeenCalledWith(expect.closeTo(7.3333, 3))
+  })
+
+  it('does not pan left of the start of the track via the left button', () => {
+    const onViewStartChange = vi.fn()
+    const { getByTitle } = render(
+      <WaveformTrack {...defaultProps} viewStartSeconds={1} onViewStartChange={onViewStartChange} />
+    )
+
+    fireEvent.click(getByTitle('Scroll the waveform left'))
+
+    expect(onViewStartChange).toHaveBeenCalledWith(0)
+  })
 })

@@ -64,6 +64,11 @@ export function Admin({
     setSelectedEpisodeId(id)
     setRefineSuggestion(null)
     setRefineError(null)
+    // The waveform panel now keeps showing its playhead line even once paused (not just while
+    // playing), so a leftover time from whatever episode was playing before would otherwise show
+    // a misleading line on an episode that's never been touched.
+    setWaveformCantoTime(0)
+    setWaveformEnglishTime(0)
   }
 
   function handleEpisodeCreated(newEpisode: DubEpisode) {
