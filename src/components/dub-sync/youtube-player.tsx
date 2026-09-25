@@ -88,6 +88,9 @@ export const YoutubePlayer = forwardRef<YoutubePlayerHandle, YoutubePlayerProps>
       unMute: () => {
         if (typeof playerRef.current?.unMute === 'function') playerRef.current.unMute()
       },
+      setVolume: (volume) => {
+        if (typeof playerRef.current?.setVolume === 'function') playerRef.current.setVolume(volume)
+      },
     }),
     []
   )

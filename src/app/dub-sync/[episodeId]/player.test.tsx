@@ -23,6 +23,8 @@ vi.mock('@/lib/dub-sync/player-controller', async () => {
         }),
         playBoth: vi.fn(),
         playEpisodeAlternating: vi.fn(),
+        pauseWithFade: vi.fn(() => Promise.resolve()),
+        playWithFade: vi.fn(),
         stop: vi.fn(),
       }
     }),
@@ -106,31 +108,34 @@ describe('Player', () => {
   })
 
   describe('Replay in English', () => {
-    it('pauses the Cantonese video and plays the English audio for the current line', () => {
+    it('fades out the Cantonese video, then plays the English audio for the current line', async () => {
       const cantoHandle = mockCantoPlayerHandle(12) // 50% through seg-1 (10-14)
 
       render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Replay in English' }))
 
-      expect(cantoHandle.pauseVideo).toHaveBeenCalled()
-      expect(getController().playSegment).toHaveBeenCalledWith(
-        'english',
-        { start: 22, end: 26 },
-        expect.any(Function)
+      expect(getController().pauseWithFade).toHaveBeenCalledWith(cantoHandle)
+      await waitFor(() =>
+        expect(getController().playSegment).toHaveBeenCalledWith(
+          'english',
+          { start: 22, end: 26 },
+          expect.any(Function)
+        )
       )
     })
 
-    it('resumes the Cantonese video once the English audio finishes', () => {
+    it('resumes the Cantonese video (via fade) once the English audio finishes', async () => {
       const cantoHandle = mockCantoPlayerHandle(12)
 
       render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Replay in English' }))
 
-      // The mocked controller invokes the onDone callback synchronously.
-      expect(cantoHandle.playVideo).toHaveBeenCalled()
+      // The mocked controller invokes playSegment's onDone callback synchronously, once the
+      // pauseWithFade promise it's chained after resolves.
+      await waitFor(() => expect(getController().playWithFade).toHaveBeenCalledWith(cantoHandle))
     })
 
-    it('shows the English video (and hides Cantonese) while its audio plays, swapping back when it finishes', () => {
+    it('shows the English video (and hides Cantonese) while its audio plays, swapping back when it finishes', async () => {
       const cantoHandle = mockCantoPlayerHandle(12)
       let capturedOnDone: (() => void) | undefined
       vi.mocked(SegmentPlaybackController).mockImplementationOnce(function SegmentPlaybackControllerMock(
@@ -143,6 +148,8 @@ describe('Player', () => {
             capturedOnDone = onDone
           }),
           playBoth: vi.fn(),
+          pauseWithFade: vi.fn(() => Promise.resolve()),
+          playWithFade: vi.fn(),
           stop: vi.fn(),
         } as never
       })
@@ -150,37 +157,38 @@ describe('Player', () => {
       render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Replay in English' }))
 
+      await waitFor(() => expect(screen.getByTestId('english-video-wrapper')).toHaveAttribute('aria-hidden', 'false'))
       expect(screen.getByTestId('canto-video-wrapper')).toHaveAttribute('aria-hidden', 'true')
-      expect(screen.getByTestId('english-video-wrapper')).toHaveAttribute('aria-hidden', 'false')
 
       act(() => capturedOnDone?.())
 
       expect(screen.getByTestId('canto-video-wrapper')).toHaveAttribute('aria-hidden', 'false')
       expect(screen.getByTestId('english-video-wrapper')).toHaveAttribute('aria-hidden', 'true')
-      expect(cantoHandle.playVideo).toHaveBeenCalled()
     })
 
-    it('picks the previous line when the current one has barely started', () => {
+    it('picks the previous line when the current one has barely started', async () => {
       mockCantoPlayerHandle(41) // 25% through seg-2 (40-44); seg-1 already finished
 
       render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Replay in English' }))
 
-      expect(getController().playSegment).toHaveBeenCalledWith(
-        'english',
-        { start: 22, end: 26 },
-        expect.any(Function)
+      await waitFor(() =>
+        expect(getController().playSegment).toHaveBeenCalledWith(
+          'english',
+          { start: 22, end: 26 },
+          expect.any(Function)
+        )
       )
     })
 
     it('shows a message instead of playing anything when no line has started yet', () => {
-      const cantoHandle = mockCantoPlayerHandle(1)
+      mockCantoPlayerHandle(1)
 
       render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Replay in English' }))
 
       // Nothing to replay, so playback is left alone rather than being paused for no reason.
-      expect(cantoHandle.pauseVideo).not.toHaveBeenCalled()
+      expect(getController().pauseWithFade).not.toHaveBeenCalled()
       expect(getController().playSegment).not.toHaveBeenCalled()
       expect(screen.getByText('No line to replay yet.')).toBeInTheDocument()
     })

@@ -24,6 +24,7 @@ function makePlayer(currentTimeSequence: number[]): YouTubePlayerLike {
     }),
     mute: vi.fn(),
     unMute: vi.fn(),
+    setVolume: vi.fn(),
   }
 }
 
@@ -39,24 +40,43 @@ describe('SegmentPlaybackController', () => {
     expect(cantoPlayer.playVideo).toHaveBeenCalled()
   })
 
-  it('pauses once playback passes the segment end', () => {
+  it('pauses once playback passes the segment end', async () => {
     const cantoPlayer = makePlayer([10, 11, 12, 15])
     const controller = new SegmentPlaybackController(() => cantoPlayer, vi.fn(), 100)
     controller.playSegment('canto', { start: 10, end: 14 })
-    vi.advanceTimersByTime(400)
+    // 400ms to detect the end via polling, plus the fade-out (FADE_DURATION_MS) before pausing.
+    await vi.advanceTimersByTimeAsync(700)
     expect(cantoPlayer.pauseVideo).toHaveBeenCalled()
   })
 
-  it('calls onDone once when the segment ends', () => {
+  it('fades the volume down to 0 before pausing', async () => {
+    const cantoPlayer = makePlayer([10, 15])
+    const controller = new SegmentPlaybackController(() => cantoPlayer, vi.fn(), 100)
+    controller.playSegment('canto', { start: 10, end: 14 })
+    await vi.advanceTimersByTimeAsync(500)
+
+    const setVolumeCalls = vi.mocked(cantoPlayer.setVolume!).mock
+    const pauseCallOrder = vi.mocked(cantoPlayer.pauseVideo).mock.invocationCallOrder[0]
+    // The last setVolume call before pausing (ignoring the earlier fade-in-to-100 calls from
+    // starting this same segment) must have set it all the way down to 0, and must have
+    // happened strictly before pauseVideo — not after.
+    const callsBeforePause = setVolumeCalls.invocationCallOrder
+      .map((order, i) => ({ order, volume: setVolumeCalls.calls[i][0] }))
+      .filter(({ order }) => order < pauseCallOrder)
+    expect(callsBeforePause.at(-1)?.volume).toBe(0)
+  })
+
+  it('calls onDone once when the segment ends', async () => {
     const cantoPlayer = makePlayer([10, 15])
     const onDone = vi.fn()
     const controller = new SegmentPlaybackController(() => cantoPlayer, vi.fn(), 100)
     controller.playSegment('canto', { start: 10, end: 14 }, onDone)
-    vi.advanceTimersByTime(300)
+    // 200ms to detect the end via polling, plus the fade-out before onDone fires.
+    await vi.advanceTimersByTimeAsync(500)
     expect(onDone).toHaveBeenCalledTimes(1)
   })
 
-  it('playBoth plays canto then chains to english once the canto segment ends', () => {
+  it('playBoth plays canto then chains to english once the canto segment ends', async () => {
     const cantoPlayer = makePlayer([10, 14, 15])
     const englishPlayer = makePlayer([8, 9])
     const getPlayer = vi.fn((lang: DubLanguage) => (lang === 'canto' ? cantoPlayer : englishPlayer))
@@ -66,7 +86,7 @@ describe('SegmentPlaybackController', () => {
     controller.playBoth({ start: 10, end: 14 }, { start: 8, end: 12 })
     expect(onLanguageChange).toHaveBeenCalledWith('canto')
 
-    vi.advanceTimersByTime(300)
+    await vi.advanceTimersByTimeAsync(500)
 
     expect(cantoPlayer.pauseVideo).toHaveBeenCalled()
     expect(onLanguageChange).toHaveBeenCalledWith('english')
@@ -81,6 +101,65 @@ describe('SegmentPlaybackController', () => {
     controller.stop()
     vi.advanceTimersByTime(1000)
     expect(cantoPlayer.pauseVideo).not.toHaveBeenCalled()
+  })
+
+  describe('playWithFade / pauseWithFade', () => {
+    // These are exported directly (not just used internally by playSegment/watchForSegmentEnd)
+    // for callers like "replay in English" that pause/resume a player outside of a tracked
+    // segment.
+
+    it('playWithFade starts silent, seeks and plays immediately, then ramps the volume up to 100', async () => {
+      const player = makePlayer([0])
+      const controller = new SegmentPlaybackController(() => player, vi.fn(), 100)
+
+      controller.playWithFade(player, 10)
+
+      expect(player.setVolume).toHaveBeenCalledWith(0)
+      expect(player.seekTo).toHaveBeenCalledWith(10, true)
+      expect(player.playVideo).toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(200)
+      expect(player.setVolume).toHaveBeenLastCalledWith(100)
+    })
+
+    it('playWithFade plays from the current position when no seek target is given', () => {
+      const player = makePlayer([0])
+      const controller = new SegmentPlaybackController(() => player, vi.fn(), 100)
+
+      controller.playWithFade(player)
+
+      expect(player.seekTo).not.toHaveBeenCalled()
+      expect(player.playVideo).toHaveBeenCalled()
+    })
+
+    it('pauseWithFade ramps the volume down to 0, then pauses, resolving only once both are done', async () => {
+      const player = makePlayer([0])
+      const controller = new SegmentPlaybackController(() => player, vi.fn(), 100)
+
+      const done = vi.fn()
+      controller.pauseWithFade(player).then(done)
+      expect(player.pauseVideo).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(200)
+
+      expect(player.setVolume).toHaveBeenLastCalledWith(0)
+      expect(player.pauseVideo).toHaveBeenCalled()
+      expect(done).toHaveBeenCalled()
+    })
+
+    it('resolves immediately without erroring when the player has no setVolume support', async () => {
+      const player: YouTubePlayerLike = {
+        seekTo: vi.fn(),
+        playVideo: vi.fn(),
+        pauseVideo: vi.fn(),
+        getCurrentTime: vi.fn(() => 0),
+      }
+      const controller = new SegmentPlaybackController(() => player, vi.fn(), 100)
+
+      await controller.pauseWithFade(player)
+
+      expect(player.pauseVideo).toHaveBeenCalled()
+    })
   })
 
   describe('playEpisodeAlternating', () => {
@@ -112,7 +191,7 @@ describe('SegmentPlaybackController', () => {
       expect(englishPlayer.unMute).toHaveBeenCalled()
     })
 
-    it('plays the english segment once canto reaches its end, then resumes canto at cantoEnd', () => {
+    it('plays the english segment once canto reaches its end, then resumes canto at cantoEnd', async () => {
       const cantoPlayer = makePlayer([12, 13, 14, 15])
       const englishPlayer = makePlayer([22, 26])
       const getPlayer = vi.fn((lang: DubLanguage) => (lang === 'canto' ? cantoPlayer : englishPlayer))
@@ -120,19 +199,20 @@ describe('SegmentPlaybackController', () => {
       const controller = new SegmentPlaybackController(getPlayer, onLanguageChange, 100)
 
       controller.playEpisodeAlternating([{ cantoStart: 10, cantoEnd: 14, englishStart: 22, englishEnd: 26 }], 12)
-      vi.advanceTimersByTime(400)
+      await vi.advanceTimersByTimeAsync(500)
 
       expect(cantoPlayer.pauseVideo).toHaveBeenCalled()
       expect(onLanguageChange).toHaveBeenCalledWith('english')
       expect(englishPlayer.seekTo).toHaveBeenCalledWith(22, true)
 
-      vi.advanceTimersByTime(200)
+      // Detecting the english segment's own end, plus both fade-outs/fade-ins along the way.
+      await vi.advanceTimersByTimeAsync(500)
 
       expect(onLanguageChange).toHaveBeenCalledWith('canto')
       expect(cantoPlayer.seekTo).toHaveBeenCalledWith(14, true)
     })
 
-    it('skips segments that already ended before the start time', () => {
+    it('skips segments that already ended before the start time', async () => {
       const cantoPlayer = makePlayer([41, 42, 43, 44])
       const englishPlayer = makePlayer([38])
       const getPlayer = vi.fn((lang: DubLanguage) => (lang === 'canto' ? cantoPlayer : englishPlayer))
@@ -145,13 +225,13 @@ describe('SegmentPlaybackController', () => {
         ],
         41
       )
-      vi.advanceTimersByTime(400)
+      await vi.advanceTimersByTimeAsync(600)
 
       expect(englishPlayer.seekTo).toHaveBeenCalledWith(38, true)
       expect(englishPlayer.seekTo).not.toHaveBeenCalledWith(22, true)
     })
 
-    it('chains through multiple segments in order', () => {
+    it('chains through multiple segments in order', async () => {
       const cantoPlayer = makePlayer([...ramp(5, 14), ...ramp(14, 44)])
       const englishPlayer = makePlayer([22, 26, 38, 41])
       const getPlayer = vi.fn((lang: DubLanguage) => (lang === 'canto' ? cantoPlayer : englishPlayer))
@@ -164,7 +244,7 @@ describe('SegmentPlaybackController', () => {
         ],
         5
       )
-      vi.advanceTimersByTime(6000)
+      await vi.advanceTimersByTimeAsync(8000)
 
       expect(englishPlayer.seekTo).toHaveBeenCalledWith(22, true)
       expect(englishPlayer.seekTo).toHaveBeenCalledWith(38, true)
@@ -194,7 +274,7 @@ describe('SegmentPlaybackController', () => {
       expect(cantoPlayer.seekTo).not.toHaveBeenCalledWith(14, true)
     })
 
-    it('resumes watching the right segment after a manual seek lands inside it', () => {
+    it('resumes watching the right segment after a manual seek lands inside it', async () => {
       // Seek jumps straight into the middle of segment 2, past segment 1 entirely.
       const cantoPlayer = makePlayer([5, 41, 44, 45])
       const englishPlayer = makePlayer([38])
@@ -208,7 +288,7 @@ describe('SegmentPlaybackController', () => {
         ],
         5
       )
-      vi.advanceTimersByTime(300)
+      await vi.advanceTimersByTimeAsync(600)
 
       expect(englishPlayer.seekTo).toHaveBeenCalledWith(38, true)
       expect(englishPlayer.seekTo).not.toHaveBeenCalledWith(22, true)

@@ -103,12 +103,15 @@ export function Player({ episode, segments, episodes }: PlayerProps) {
       setReplayMessage('No line to replay yet.')
       return
     }
+    const cantoPlayer = cantoPlayerRef.current
+    if (!cantoPlayer) return
 
     setReplayMessage(null)
-    cantoPlayerRef.current?.pauseVideo()
-    controllerRef.current?.playSegment('english', { start: segment.englishStart, end: segment.englishEnd }, () => {
-      setVisibleLanguage('canto')
-      cantoPlayerRef.current?.playVideo()
+    controllerRef.current?.pauseWithFade(cantoPlayer).then(() => {
+      controllerRef.current?.playSegment('english', { start: segment.englishStart, end: segment.englishEnd }, () => {
+        setVisibleLanguage('canto')
+        controllerRef.current?.playWithFade(cantoPlayer)
+      })
     })
   }
 

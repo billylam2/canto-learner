@@ -6,6 +6,7 @@ export interface YouTubePlayerLike {
   setPlaybackRate?(rate: number): void
   mute?(): void
   unMute?(): void
+  setVolume?(volume: number): void
   destroy?(): void
 }
 
@@ -28,8 +29,14 @@ export interface AlternatingSegment {
 // from "playback reached the segment boundary on its own."
 const SEEK_JUMP_THRESHOLD_SECONDS = 2
 
+// Quick enough not to make switches feel sluggish, but long enough to round off what was
+// previously an instant, hard audio cut on every language swap.
+const FADE_DURATION_MS = 150
+const FADE_STEPS = 5
+
 export class SegmentPlaybackController {
   private timer: ReturnType<typeof setInterval> | null = null
+  private fadeTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(
     private getPlayer: (lang: DubLanguage) => YouTubePlayerLike,
@@ -37,18 +44,53 @@ export class SegmentPlaybackController {
     private pollIntervalMs = 200
   ) {}
 
+  // Ramps a player's volume linearly over FADE_DURATION_MS. Falls back to resolving immediately
+  // when the underlying player doesn't support setVolume (e.g. bare test doubles), so callers
+  // never need their own capability check.
+  private fadeVolume(player: YouTubePlayerLike, from: number, to: number): Promise<void> {
+    if (typeof player.setVolume !== 'function') return Promise.resolve()
+    return new Promise((resolve) => {
+      let step = 0
+      this.fadeTimer = setInterval(() => {
+        step += 1
+        player.setVolume!(Math.round(from + ((to - from) * step) / FADE_STEPS))
+        if (step >= FADE_STEPS) {
+          if (this.fadeTimer) {
+            clearInterval(this.fadeTimer)
+            this.fadeTimer = null
+          }
+          resolve()
+        }
+      }, FADE_DURATION_MS / FADE_STEPS)
+    })
+  }
+
+  // Fades a player's audio down to silent before pausing it, so the outgoing side of a language
+  // swap doesn't cut off mid-word. Exported for callers (like a manual "replay in English") that
+  // pause a player directly rather than through playSegment/watchForSegmentEnd below.
+  pauseWithFade(player: YouTubePlayerLike): Promise<void> {
+    return this.fadeVolume(player, 100, 0).then(() => player.pauseVideo())
+  }
+
+  // The counterpart to pauseWithFade: starts a player silent (optionally seeking first) and
+  // fades its audio up to full, for the incoming side of a language swap.
+  playWithFade(player: YouTubePlayerLike, seekSeconds?: number): void {
+    player.setVolume?.(0)
+    if (seekSeconds !== undefined) player.seekTo(seekSeconds, true)
+    player.playVideo()
+    this.fadeVolume(player, 0, 100)
+  }
+
   playSegment(lang: DubLanguage, segment: PlaybackSegment, onDone?: () => void): void {
     this.stop()
     this.onLanguageChange(lang)
     const player = this.getPlayer(lang)
-    player.seekTo(segment.start, true)
-    player.playVideo()
+    this.playWithFade(player, segment.start)
 
     this.timer = setInterval(() => {
       if (player.getCurrentTime() >= segment.end) {
-        player.pauseVideo()
         this.stop()
-        onDone?.()
+        this.pauseWithFade(player).then(() => onDone?.())
       }
     }, this.pollIntervalMs)
   }
@@ -109,12 +151,12 @@ export class SegmentPlaybackController {
 
       if (currentTime >= segment.cantoEnd) {
         this.stop()
-        cantoPlayer.pauseVideo()
-        this.playSegment('english', { start: segment.englishStart, end: segment.englishEnd }, () => {
-          this.onLanguageChange('canto')
-          cantoPlayer.seekTo(segment.cantoEnd, true)
-          cantoPlayer.playVideo()
-          this.watchForSegmentEnd(segments, index + 1)
+        this.pauseWithFade(cantoPlayer).then(() => {
+          this.playSegment('english', { start: segment.englishStart, end: segment.englishEnd }, () => {
+            this.onLanguageChange('canto')
+            this.playWithFade(cantoPlayer, segment.cantoEnd)
+            this.watchForSegmentEnd(segments, index + 1)
+          })
         })
       }
     }, this.pollIntervalMs)
@@ -124,6 +166,10 @@ export class SegmentPlaybackController {
     if (this.timer) {
       clearInterval(this.timer)
       this.timer = null
+    }
+    if (this.fadeTimer) {
+      clearInterval(this.fadeTimer)
+      this.fadeTimer = null
     }
   }
 }

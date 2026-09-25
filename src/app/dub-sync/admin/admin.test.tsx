@@ -729,7 +729,7 @@ describe('Admin play segment from the segment table', () => {
     vi.useRealTimers()
   })
 
-  it('plays the English portion once the Cantonese portion finishes', () => {
+  it('plays the English portion once the Cantonese portion finishes', async () => {
     vi.useFakeTimers()
     const refs = captureRefs()
     let cantoTime = 15
@@ -742,12 +742,13 @@ describe('Admin play segment from the segment table', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Play' }))
 
     cantoTime = 34 // still before the segment's end (35)
-    act(() => vi.advanceTimersByTime(200))
+    await act(() => vi.advanceTimersByTimeAsync(200))
     expect(cantoHandle.pauseVideo).not.toHaveBeenCalled()
     expect(englishHandle.playVideo).not.toHaveBeenCalled()
 
     cantoTime = 35 // reached the segment's end
-    act(() => vi.advanceTimersByTime(200))
+    // Detecting the end via polling, plus the (SegmentPlaybackController) fade-out before pausing.
+    await act(() => vi.advanceTimersByTimeAsync(500))
     expect(cantoHandle.pauseVideo).toHaveBeenCalled()
     expect(englishHandle.seekTo).toHaveBeenCalledWith(30, true)
     expect(englishHandle.playVideo).toHaveBeenCalled()
