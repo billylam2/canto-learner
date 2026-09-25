@@ -367,8 +367,10 @@ export function Admin({
   // Reuses stopSyncedPlayback so entering adjustment gets the same pause + 1x-rate-reset +
   // `syncing: false` behavior for free — which, since both the resync interval and the spacebar
   // listener are already gated on `syncing`, also suspends them without any extra guard here.
+  // Available whether or not synced playback is currently running (just anchors set), since
+  // wanting to add a checkpoint from wherever you already paused is a normal thing to want.
   function enterCheckpointAdjustment() {
-    if (!syncing) return
+    if (!episode || !anchorsSet) return
     stopSyncedPlayback()
     setCheckpointError(null)
     setAdjustingCheckpoint(true)
@@ -655,7 +657,7 @@ export function Admin({
               </button>
               <button
                 onClick={enterCheckpointAdjustment}
-                disabled={!syncing}
+                disabled={!anchorsSet}
                 className="border p-2 rounded"
                 title="Pause and manually correct the English position to fix drift from here onward"
               >

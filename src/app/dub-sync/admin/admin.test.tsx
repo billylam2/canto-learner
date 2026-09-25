@@ -376,9 +376,22 @@ describe('Admin resync checkpoints', () => {
     vi.stubGlobal('fetch', vi.fn())
   })
 
-  it('disables the Resync checkpoint button until synced playback is running', () => {
-    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+  it('disables the Resync checkpoint button until anchors are set', () => {
+    render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} />)
     expect(screen.getByRole('button', { name: 'Resync checkpoint' })).toBeDisabled()
+  })
+
+  it('is usable without starting synced playback first, so a checkpoint can be added from wherever the video is already paused', () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 60)
+    const englishHandle = makeHandle(() => 130)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    refs.assign(cantoHandle, englishHandle)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resync checkpoint' }))
+
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument()
   })
 
   it('entering adjustment mode pauses both players and shows the adjustment panel', () => {
