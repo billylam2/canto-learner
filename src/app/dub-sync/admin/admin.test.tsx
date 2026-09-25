@@ -12,6 +12,8 @@ vi.mock('./waveform-marking', () => ({
     isPlaying?: boolean
     cantoTimeSeconds?: number
     englishTimeSeconds?: number
+    adjustingCheckpoint?: boolean
+    onResyncNudge?: (deltaSeconds: number) => void
   }) => (
     <div data-testid="waveform-marking">
       <span data-testid="canto-peaks">{JSON.stringify(props.cantoPeaks)}</span>
@@ -19,6 +21,8 @@ vi.mock('./waveform-marking', () => ({
       <span data-testid="waveform-is-playing">{String(props.isPlaying)}</span>
       <span data-testid="waveform-canto-time">{props.cantoTimeSeconds}</span>
       <span data-testid="waveform-english-time">{props.englishTimeSeconds}</span>
+      <span data-testid="waveform-adjusting-checkpoint">{String(props.adjustingCheckpoint)}</span>
+      <button onClick={() => props.onResyncNudge?.(-1)}>trigger-resync-nudge</button>
     </div>
   ),
 }))
@@ -392,6 +396,22 @@ describe('Admin resync checkpoints', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resync checkpoint' }))
 
     expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument()
+  })
+
+  it('passes adjustingCheckpoint through to the waveform panel, and forwards its resync-drag nudges to the English player', () => {
+    const refs = captureRefs()
+    const cantoHandle = makeHandle(() => 60)
+    const englishHandle = makeHandle(() => 130)
+
+    render(<Admin episodes={[episodeWithAnchors]} segmentsByEpisode={{ 'ep-a': [] }} />)
+    refs.assign(cantoHandle, englishHandle)
+    expect(screen.getByTestId('waveform-adjusting-checkpoint')).toHaveTextContent('false')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resync checkpoint' }))
+    expect(screen.getByTestId('waveform-adjusting-checkpoint')).toHaveTextContent('true')
+
+    fireEvent.click(screen.getByRole('button', { name: 'trigger-resync-nudge' }))
+    expect(englishHandle.seekTo).toHaveBeenCalledWith(129, true)
   })
 
   it('entering adjustment mode pauses both players and shows the adjustment panel', () => {

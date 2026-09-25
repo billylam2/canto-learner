@@ -460,17 +460,19 @@ export function Admin({
   // Live playback position for the waveform panel's playhead line and its scroll-follow — kept
   // separate from the resync-correction interval above (different concern, and this one needs a
   // much shorter tick to look smooth). Only runs in waveform mode, since spacebar mode never
-  // reads it.
+  // reads it. Also runs while adjusting a checkpoint (even though that's paused, not syncing) —
+  // the resync-drag gesture seeks the English player directly via nudgeEnglish, and this is what
+  // keeps the playhead line and view-follow reflecting that live position as it happens.
   const [waveformCantoTime, setWaveformCantoTime] = useState(0)
   const [waveformEnglishTime, setWaveformEnglishTime] = useState(0)
   useEffect(() => {
-    if (!syncing || markingMode !== 'waveform') return
+    if ((!syncing && !adjustingCheckpoint) || markingMode !== 'waveform') return
     const interval = setInterval(() => {
       setWaveformCantoTime(cantoPlayerRef.current?.getCurrentTime() ?? 0)
       setWaveformEnglishTime(englishPlayerRef.current?.getCurrentTime() ?? 0)
     }, 100)
     return () => clearInterval(interval)
-  }, [syncing, markingMode])
+  }, [syncing, adjustingCheckpoint, markingMode])
 
   // Space bar is the marking key while synced playback is running: hold it down for as long as a
   // character/narrator is speaking, release when they stop. The segment's end is the release
@@ -807,6 +809,8 @@ export function Admin({
                 isPlaying={syncing}
                 cantoTimeSeconds={waveformCantoTime}
                 englishTimeSeconds={waveformEnglishTime}
+                adjustingCheckpoint={adjustingCheckpoint}
+                onResyncNudge={nudgeEnglish}
               />
             )}
 

@@ -8,12 +8,20 @@ vi.mock('./waveform-track', () => ({
     onViewStartChange: (v: number) => void
     onSelectionDrafted: (start: number, end: number) => void
     playheadSeconds: number | null
+    checkpointSeconds: number[]
+    resyncMode: boolean
+    onResyncDrag: (deltaSeconds: number) => void
+    allowDragSelect: boolean
   }) => (
     <div>
       <button onClick={() => props.onSelectionDrafted(10, 12)}>{`draft-${props.color}`}</button>
       <button onClick={() => props.onViewStartChange(props.viewStartSeconds + 5)}>{`pan-${props.color}`}</button>
+      <button onClick={() => props.onResyncDrag(-1)}>{`resync-${props.color}`}</button>
       <div data-testid={`viewstart-${props.color}`}>{props.viewStartSeconds}</div>
       <div data-testid={`playhead-${props.color}`}>{String(props.playheadSeconds)}</div>
+      <div data-testid={`checkpoints-${props.color}`}>{JSON.stringify(props.checkpointSeconds)}</div>
+      <div data-testid={`resyncmode-${props.color}`}>{String(props.resyncMode)}</div>
+      <div data-testid={`allowdrag-${props.color}`}>{String(props.allowDragSelect)}</div>
     </div>
   ),
 }))
@@ -147,5 +155,55 @@ describe('WaveformMarking', () => {
     // TRACK_WIDTH=800, pixelsPerSecond=60 -> half window = 6.6667
     expect(screen.getByTestId(`viewstart-${CANTO_COLOR}`)).toHaveTextContent(/^35\.3/)
     expect(screen.getByTestId(`viewstart-${ENGLISH_COLOR}`)).toHaveTextContent(/^45\.3/)
+  })
+
+  it('shows existing checkpoints as markers on the Cantonese track only', () => {
+    renderMarking({
+      checkpoints: [
+        { id: 'chk-1', episodeId: 'ep-1', cantoTime: 15, englishTime: 25 },
+        { id: 'chk-2', episodeId: 'ep-1', cantoTime: 50, englishTime: 90 },
+      ],
+    })
+
+    expect(screen.getByTestId(`checkpoints-${CANTO_COLOR}`)).toHaveTextContent('[15,50]')
+    expect(screen.getByTestId(`checkpoints-${ENGLISH_COLOR}`)).toHaveTextContent('[]')
+  })
+
+  it('enables resync-drag mode on the English track only while adjusting a checkpoint, and disables Cantonese drag-select', () => {
+    const { rerender } = renderMarking({ adjustingCheckpoint: false })
+    expect(screen.getByTestId(`resyncmode-${ENGLISH_COLOR}`)).toHaveTextContent('false')
+    expect(screen.getByTestId(`allowdrag-${CANTO_COLOR}`)).toHaveTextContent('true')
+
+    rerender(
+      <WaveformMarking
+        episodeId="ep-1"
+        cantoPeaks={[]}
+        englishPeaks={[]}
+        anchors={anchors}
+        checkpoints={[]}
+        segments={[]}
+        onSegmentCreated={vi.fn()}
+        adjustingCheckpoint={true}
+      />
+    )
+    expect(screen.getByTestId(`resyncmode-${ENGLISH_COLOR}`)).toHaveTextContent('true')
+    expect(screen.getByTestId(`allowdrag-${CANTO_COLOR}`)).toHaveTextContent('false')
+  })
+
+  it('forwards English track resync drags to onResyncNudge', () => {
+    const onResyncNudge = vi.fn()
+    renderMarking({ adjustingCheckpoint: true, onResyncNudge })
+
+    fireEvent.click(screen.getByRole('button', { name: `resync-${ENGLISH_COLOR}` }))
+
+    expect(onResyncNudge).toHaveBeenCalledWith(-1)
+  })
+
+  it('keeps the English view following live playback time while adjusting a checkpoint, without moving the Cantonese view', () => {
+    renderMarking({ adjustingCheckpoint: true, cantoTimeSeconds: 42, englishTimeSeconds: 52 })
+
+    // TRACK_WIDTH=800, pixelsPerSecond=60 -> half window = 6.6667
+    expect(screen.getByTestId(`viewstart-${ENGLISH_COLOR}`)).toHaveTextContent(/^45\.3/)
+    expect(screen.getByTestId(`viewstart-${CANTO_COLOR}`)).toHaveTextContent('0')
   })
 })

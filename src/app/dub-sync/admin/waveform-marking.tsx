@@ -25,6 +25,8 @@ export interface WaveformMarkingProps {
   isPlaying?: boolean
   cantoTimeSeconds?: number
   englishTimeSeconds?: number
+  adjustingCheckpoint?: boolean
+  onResyncNudge?: (deltaSeconds: number) => void
 }
 
 function noop() {}
@@ -40,6 +42,8 @@ export function WaveformMarking({
   isPlaying = false,
   cantoTimeSeconds = 0,
   englishTimeSeconds = 0,
+  adjustingCheckpoint = false,
+  onResyncNudge = noop,
 }: WaveformMarkingProps) {
   const [pixelsPerSecond, setPixelsPerSecond] = useState(DEFAULT_PIXELS_PER_SECOND)
   const [cantoViewStart, setCantoViewStart] = useState(0)
@@ -66,11 +70,13 @@ export function WaveformMarking({
   // moves — a navigation aid only, never a saved value. Deliberately excludes englishViewStart
   // from its own dependencies, so a manual scroll on the English track (which also calls
   // setEnglishViewStart, via WaveformTrack's onViewStartChange) isn't immediately overwritten —
-  // it only re-syncs the next time the Cantonese view itself changes. Skipped entirely while
-  // playing, since the playback-following effect below drives both views directly from live
-  // player position instead (this derived-from-Cantonese estimate would otherwise fight it).
+  // it only re-syncs the next time the Cantonese view itself changes. Skipped while playing (the
+  // playback-following effect below drives both views directly from live player position
+  // instead) and while adjusting a checkpoint (the English view is being driven by the live
+  // englishTimeSeconds during resync-dragging instead) — either would otherwise fight this
+  // derived-from-Cantonese estimate.
   useEffect(() => {
-    if (isPlaying) return
+    if (isPlaying || adjustingCheckpoint) return
     const cantoViewCenter = cantoViewStart + TRACK_WIDTH / pixelsPerSecond / 2
     try {
       const englishCenter = englishTimeFor(cantoViewCenter, anchors, checkpoints)
@@ -80,21 +86,26 @@ export function WaveformMarking({
       // Anchors momentarily invalid (e.g. mid-edit) — leave the English view where it is, same
       // defensive handling as computeResyncTarget.
     }
-  }, [cantoViewStart, pixelsPerSecond, anchors, checkpoints, isPlaying])
+  }, [cantoViewStart, pixelsPerSecond, anchors, checkpoints, isPlaying, adjustingCheckpoint])
 
   // While playing, keeps both waveforms scrolled so the live playhead line stays roughly
   // centered — otherwise it runs off the visible ~13-second window within a few seconds of
-  // playback and the marking aid this is meant to provide is lost.
+  // playback and the marking aid this is meant to provide is lost. While adjusting a checkpoint
+  // (not playing), only the English view follows — the Cantonese side is paused and stays free
+  // for the user to pan around for context without fighting a recenter on every poll tick.
   useEffect(() => {
-    if (!isPlaying) return
+    if (!isPlaying && !adjustingCheckpoint) return
     const halfWindowSeconds = TRACK_WIDTH / pixelsPerSecond / 2
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- view position tracks the parent's live-polled player time, which can't be computed during render.
-    setCantoViewStart(Math.max(0, cantoTimeSeconds - halfWindowSeconds))
+    if (isPlaying) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- view position tracks the parent's live-polled player time, which can't be computed during render.
+      setCantoViewStart(Math.max(0, cantoTimeSeconds - halfWindowSeconds))
+    }
     setEnglishViewStart(Math.max(0, englishTimeSeconds - halfWindowSeconds))
-  }, [isPlaying, cantoTimeSeconds, englishTimeSeconds, pixelsPerSecond])
+  }, [isPlaying, adjustingCheckpoint, cantoTimeSeconds, englishTimeSeconds, pixelsPerSecond])
 
   const cantoMarkedRanges: WaveformRange[] = segments.map((s) => ({ start: s.cantoStart, end: s.cantoEnd }))
   const englishMarkedRanges: WaveformRange[] = segments.map((s) => ({ start: s.englishStart, end: s.englishEnd }))
+  const checkpointCantoSeconds = checkpoints.map((c) => c.cantoTime)
 
   async function confirmSegment() {
     if (!pendingRange || !englishPendingRange) return
@@ -149,9 +160,12 @@ export function WaveformMarking({
         markedRanges={cantoMarkedRanges}
         pendingSelection={pendingRange}
         onSelectionDrafted={(start, end) => setPendingRange({ start, end })}
-        allowDragSelect={true}
+        allowDragSelect={!adjustingCheckpoint}
         color={CANTO_COLOR}
         playheadSeconds={cantoTimeSeconds}
+        checkpointSeconds={checkpointCantoSeconds}
+        resyncMode={false}
+        onResyncDrag={noop}
       />
 
       <div className="text-xs text-gray-500 mt-2">English</div>
@@ -169,6 +183,9 @@ export function WaveformMarking({
         allowDragSelect={false}
         color={ENGLISH_COLOR}
         playheadSeconds={englishTimeSeconds}
+        checkpointSeconds={[]}
+        resyncMode={adjustingCheckpoint}
+        onResyncDrag={onResyncNudge}
       />
 
       {pendingRange && (

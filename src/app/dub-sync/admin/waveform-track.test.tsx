@@ -10,9 +10,11 @@ function mockCanvas() {
     moveTo: vi.fn(),
     lineTo: vi.fn(),
     stroke: vi.fn(),
+    fillText: vi.fn(),
     set fillStyle(_: string) {},
     set strokeStyle(_: string) {},
     set lineWidth(_: number) {},
+    set font(_: string) {},
   }
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D)
   vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue({
@@ -43,6 +45,9 @@ const defaultProps = {
   allowDragSelect: true,
   color: '#4ade80',
   playheadSeconds: null,
+  checkpointSeconds: [],
+  resyncMode: false,
+  onResyncDrag: vi.fn(),
 }
 
 describe('WaveformTrack', () => {
@@ -94,6 +99,48 @@ describe('WaveformTrack', () => {
     fireEvent.mouseUp(window)
 
     expect(onSelectionDrafted).not.toHaveBeenCalled()
+  })
+
+  it('in resync mode, dragging nudges by the delta instead of drafting a selection', () => {
+    const onSelectionDrafted = vi.fn()
+    const onResyncDrag = vi.fn()
+    const { container } = render(
+      <WaveformTrack
+        {...defaultProps}
+        resyncMode={true}
+        onResyncDrag={onResyncDrag}
+        onSelectionDrafted={onSelectionDrafted}
+      />
+    )
+    const canvas = container.querySelector('canvas')!
+
+    // pixelsPerSecond=60: dragging right by 60px should nudge backward by -1s (earlier audio
+    // comes under the fixed reference point when you drag right), then a further 30px -> -0.5s.
+    fireEvent.mouseDown(canvas, { clientX: 100 })
+    fireEvent.mouseMove(window, { clientX: 160 })
+    fireEvent.mouseMove(window, { clientX: 190 })
+    fireEvent.mouseUp(window)
+
+    expect(onResyncDrag).toHaveBeenNthCalledWith(1, -1)
+    expect(onResyncDrag).toHaveBeenNthCalledWith(2, -0.5)
+    expect(onSelectionDrafted).not.toHaveBeenCalled()
+  })
+
+  it('draws a marker and label at each checkpoint position', () => {
+    const ctx = mockCanvas()
+    render(<WaveformTrack {...defaultProps} checkpointSeconds={[2]} />)
+
+    // pixelsPerSecond=60, viewStartSeconds=0 -> 2s is x=120
+    expect(ctx.moveTo).toHaveBeenCalledWith(120, 0)
+    expect(ctx.lineTo).toHaveBeenCalledWith(120, 90)
+    expect(ctx.fillText).toHaveBeenCalledWith('2.0s', 122, 10)
+  })
+
+  it('does not draw a checkpoint marker outside the visible view', () => {
+    const ctx = mockCanvas()
+    render(<WaveformTrack {...defaultProps} checkpointSeconds={[50]} />)
+
+    expect(ctx.fillText).not.toHaveBeenCalled()
   })
 
   it('does not pan on scroll/wheel — trackpad horizontal scroll panned too aggressively, so panning is button-only now', () => {
