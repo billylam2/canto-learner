@@ -90,8 +90,10 @@ describe('Player', () => {
 
   it('initially shows the Cantonese video with the English video visually hidden', () => {
     render(<Player episode={episode} segments={segments} episodes={episodes} />)
-    expect(screen.getByTestId('canto-video-wrapper')).not.toHaveClass('sr-only')
-    expect(screen.getByTestId('english-video-wrapper')).toHaveClass('sr-only')
+    expect(screen.getByTestId('canto-video-wrapper')).toHaveAttribute('aria-hidden', 'false')
+    expect(screen.getByTestId('canto-video-wrapper')).toHaveClass('opacity-100')
+    expect(screen.getByTestId('english-video-wrapper')).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.getByTestId('english-video-wrapper')).toHaveClass('opacity-0')
   })
 
   it('shows an inline message when a player reports an error', () => {
@@ -148,13 +150,13 @@ describe('Player', () => {
       render(<Player episode={episode} segments={segments} episodes={episodes} />)
       fireEvent.click(screen.getByRole('button', { name: 'Replay in English' }))
 
-      expect(screen.getByTestId('canto-video-wrapper')).toHaveClass('sr-only')
-      expect(screen.getByTestId('english-video-wrapper')).not.toHaveClass('sr-only')
+      expect(screen.getByTestId('canto-video-wrapper')).toHaveAttribute('aria-hidden', 'true')
+      expect(screen.getByTestId('english-video-wrapper')).toHaveAttribute('aria-hidden', 'false')
 
       act(() => capturedOnDone?.())
 
-      expect(screen.getByTestId('canto-video-wrapper')).not.toHaveClass('sr-only')
-      expect(screen.getByTestId('english-video-wrapper')).toHaveClass('sr-only')
+      expect(screen.getByTestId('canto-video-wrapper')).toHaveAttribute('aria-hidden', 'false')
+      expect(screen.getByTestId('english-video-wrapper')).toHaveAttribute('aria-hidden', 'true')
       expect(cantoHandle.playVideo).toHaveBeenCalled()
     })
 

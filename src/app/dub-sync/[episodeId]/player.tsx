@@ -48,16 +48,27 @@ export function Player({ episode, segments, episodes }: PlayerProps) {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
 
-  // Sizes the visible video to fill as much of the screen as the 16:9 aspect ratio allows
+  // Sizes the shared video box to fill as much of the screen as the 16:9 aspect ratio allows
   // (the same min(100vw, 100vh*16/9) x min(100vh, 100vw*9/16) formula browsers use for native
-  // fullscreen video), and forces the underlying iframe (which YT sizes via width/height HTML
-  // attributes, not CSS) to fill that box. Outside fullscreen, the iframe is instead sized
-  // fluidly (100% width, 16:9 height) so it shrinks to fit narrow/mobile viewports rather than
-  // staying at a fixed pixel width and overflowing into the sidebar.
-  function videoWrapperClassName(isVisibleVideo: boolean): string | undefined {
-    if (!isVisibleVideo) return 'sr-only'
-    if (isFullscreen) return '[&_iframe]:w-full [&_iframe]:h-full w-[min(100vw,177.78vh)] h-[min(100vh,56.25vw)]'
-    return '[&_iframe]:w-full [&_iframe]:h-auto [&_iframe]:aspect-video w-full max-w-[960px]'
+  // fullscreen video), and forces the underlying iframes (which YT sizes via width/height HTML
+  // attributes, not CSS) to fill it. Outside fullscreen, the box is instead sized fluidly (100%
+  // width, 16:9 height) so it shrinks to fit narrow/mobile viewports rather than staying at a
+  // fixed pixel width and overflowing into the sidebar. Both videos share this one box (see the
+  // comment on the wrapper markup below) so it doesn't change size across a language swap.
+  function videoBoxClassName(): string {
+    if (isFullscreen) return 'relative [&_iframe]:w-full [&_iframe]:h-full w-[min(100vw,177.78vh)] h-[min(100vh,56.25vw)]'
+    return 'relative [&_iframe]:w-full [&_iframe]:h-full w-full max-w-[960px] aspect-video'
+  }
+
+  // Both videos are absolutely stacked in the same box and cross-fade via opacity instead of
+  // being swapped in/out of layout — swapping used to collapse the hidden video down to a 1x1px
+  // sr-only box and back, which forced YouTube's iframe to redraw at a drastically different
+  // size on every switch and was the source of the white flash on each language change; opacity
+  // alone never changes the iframe's rendered size. The transition also softens what was an
+  // instant hard cut into a brief crossfade.
+  function videoLayerClassName(isVisibleVideo: boolean): string {
+    const visibility = isVisibleVideo ? 'opacity-100' : 'opacity-0 pointer-events-none'
+    return `absolute inset-0 transition-opacity duration-300 ${visibility}`
   }
 
   function toggleFullscreen() {
@@ -135,22 +146,32 @@ export function Player({ episode, segments, episodes }: PlayerProps) {
         ref={playerContainerRef}
         className={isFullscreen ? 'fixed inset-0 z-50 flex items-center justify-center bg-black' : undefined}
       >
-        <div data-testid="canto-video-wrapper" className={videoWrapperClassName(visibleLanguage === 'canto')}>
-          <YoutubePlayer
-            ref={cantoPlayerRef}
-            videoId={episode.cantoneseVideoId}
-            elementId="canto-player"
-            onError={() => setPlayerError('This video is unavailable.')}
-            onEnded={goToNextEpisode}
-          />
-        </div>
-        <div data-testid="english-video-wrapper" className={videoWrapperClassName(visibleLanguage === 'english')}>
-          <YoutubePlayer
-            ref={englishPlayerRef}
-            videoId={episode.englishVideoId}
-            elementId="english-player"
-            onError={() => setPlayerError('This video is unavailable.')}
-          />
+        <div className={videoBoxClassName()}>
+          <div
+            data-testid="canto-video-wrapper"
+            className={videoLayerClassName(visibleLanguage === 'canto')}
+            aria-hidden={visibleLanguage !== 'canto'}
+          >
+            <YoutubePlayer
+              ref={cantoPlayerRef}
+              videoId={episode.cantoneseVideoId}
+              elementId="canto-player"
+              onError={() => setPlayerError('This video is unavailable.')}
+              onEnded={goToNextEpisode}
+            />
+          </div>
+          <div
+            data-testid="english-video-wrapper"
+            className={videoLayerClassName(visibleLanguage === 'english')}
+            aria-hidden={visibleLanguage !== 'english'}
+          >
+            <YoutubePlayer
+              ref={englishPlayerRef}
+              videoId={episode.englishVideoId}
+              elementId="english-player"
+              onError={() => setPlayerError('This video is unavailable.')}
+            />
+          </div>
         </div>
 
         {playerError && (
@@ -159,7 +180,7 @@ export function Player({ episode, segments, episodes }: PlayerProps) {
           </p>
         )}
 
-        {/* In fullscreen, the video fills the screen (see videoWrapperClassName above) with
+        {/* In fullscreen, the video fills the screen (see videoBoxClassName above) with
             nothing overlaid on top of it — no controls, so nothing sits over the video's own
             captions. Exiting relies on the browser's own fullscreen exit (Esc key), which the
             fullscreenchange listener above already picks up — EXCEPT when native fullscreen
