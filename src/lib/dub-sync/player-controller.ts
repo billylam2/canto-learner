@@ -67,9 +67,15 @@ export class SegmentPlaybackController {
 
   // Fades a player's audio down to silent before pausing it, so the outgoing side of a language
   // swap doesn't cut off mid-word. Exported for callers (like a manual "replay in English") that
-  // pause a player directly rather than through playSegment/watchForSegmentEnd below.
+  // pause a player directly rather than through playSegment/watchForSegmentEnd below. Restores
+  // the volume to 100 right after pausing — inaudible since the player is now silent anyway —
+  // so a later playVideo() from anywhere that isn't itself fade-aware (e.g. admin's "Play
+  // synced", which calls playVideo() directly) doesn't resume still muted from this fade-out.
   pauseWithFade(player: YouTubePlayerLike): Promise<void> {
-    return this.fadeVolume(player, 100, 0).then(() => player.pauseVideo())
+    return this.fadeVolume(player, 100, 0).then(() => {
+      player.pauseVideo()
+      player.setVolume?.(100)
+    })
   }
 
   // The counterpart to pauseWithFade: starts a player silent (optionally seeking first) and

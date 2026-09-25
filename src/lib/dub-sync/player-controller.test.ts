@@ -142,9 +142,22 @@ describe('SegmentPlaybackController', () => {
 
       await vi.advanceTimersByTimeAsync(200)
 
-      expect(player.setVolume).toHaveBeenLastCalledWith(0)
+      expect(player.setVolume).toHaveBeenCalledWith(0)
       expect(player.pauseVideo).toHaveBeenCalled()
       expect(done).toHaveBeenCalled()
+    })
+
+    it('pauseWithFade restores the volume to 100 right after pausing, so a later playVideo() from outside the fade helpers is not left muted', async () => {
+      // This is what "Play synced" and other admin controls do — they call playVideo() directly
+      // on the player rather than through playWithFade, so anything pauseWithFade leaves the
+      // volume at would otherwise silently carry over into unrelated later playback.
+      const player = makePlayer([0])
+      const controller = new SegmentPlaybackController(() => player, vi.fn(), 100)
+
+      controller.pauseWithFade(player)
+      await vi.advanceTimersByTimeAsync(200)
+
+      expect(player.setVolume).toHaveBeenLastCalledWith(100)
     })
 
     it('resolves immediately without erroring when the player has no setVolume support', async () => {
