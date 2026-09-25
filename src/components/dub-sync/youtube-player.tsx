@@ -6,9 +6,10 @@ import type { YouTubePlayerLike } from '@/lib/dub-sync/player-controller'
 
 export interface YoutubePlayerHandle extends YouTubePlayerLike {}
 
-// YouTube IFrame API player state for "video finished playing" — see
+// YouTube IFrame API player states — see
 // https://developers.google.com/youtube/iframe_api_reference#Playback_status
 const YT_PLAYER_STATE_ENDED = 0
+const YT_PLAYER_STATE_PLAYING = 1
 
 interface YoutubePlayerProps {
   videoId: string
@@ -23,6 +24,11 @@ export const YoutubePlayer = forwardRef<YoutubePlayerHandle, YoutubePlayerProps>
 ) {
   const playerRef = useRef<YouTubePlayerLike | null>(null)
   const [ready, setReady] = useState(false)
+  // Resolved (and cleared) the next time this player reaches the PLAYING state — lets a caller
+  // that just started this player wait for real playback to begin before revealing it, rather
+  // than revealing it the instant playVideo() is called (which shows YouTube's own paused/cued
+  // overlay for a moment, before this player has any actual frames to show).
+  const playingWaitersRef = useRef<Array<() => void>>([])
 
   // Callers commonly pass inline arrow functions for these, which get a new identity on every
   // render. Reading them via refs (rather than depending on them directly) keeps the effect
@@ -47,6 +53,11 @@ export const YoutubePlayer = forwardRef<YoutubePlayerHandle, YoutubePlayerProps>
           onError: () => onErrorRef.current?.(),
           onStateChange: (event) => {
             if (event.data === YT_PLAYER_STATE_ENDED) onEndedRef.current?.()
+            if (event.data === YT_PLAYER_STATE_PLAYING) {
+              const waiters = playingWaitersRef.current
+              playingWaitersRef.current = []
+              waiters.forEach((resolve) => resolve())
+            }
           },
         },
       })
@@ -91,6 +102,7 @@ export const YoutubePlayer = forwardRef<YoutubePlayerHandle, YoutubePlayerProps>
       setVolume: (volume) => {
         if (typeof playerRef.current?.setVolume === 'function') playerRef.current.setVolume(volume)
       },
+      waitUntilPlaying: () => new Promise((resolve) => playingWaitersRef.current.push(resolve)),
     }),
     []
   )

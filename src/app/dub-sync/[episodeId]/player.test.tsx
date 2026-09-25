@@ -25,6 +25,7 @@ vi.mock('@/lib/dub-sync/player-controller', async () => {
         playEpisodeAlternating: vi.fn(),
         pauseWithFade: vi.fn(() => Promise.resolve()),
         playWithFade: vi.fn(),
+        revealWhenPlaying: vi.fn(),
         stop: vi.fn(),
       }
     }),
@@ -150,6 +151,7 @@ describe('Player', () => {
           playBoth: vi.fn(),
           pauseWithFade: vi.fn(() => Promise.resolve()),
           playWithFade: vi.fn(),
+          revealWhenPlaying: vi.fn((lang: string) => onLanguageChange(lang)),
           stop: vi.fn(),
         } as never
       })

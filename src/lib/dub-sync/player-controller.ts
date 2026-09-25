@@ -7,6 +7,7 @@ export interface YouTubePlayerLike {
   mute?(): void
   unMute?(): void
   setVolume?(volume: number): void
+  waitUntilPlaying?(): Promise<void>
   destroy?(): void
 }
 
@@ -87,11 +88,27 @@ export class SegmentPlaybackController {
     this.fadeVolume(player, 0, 100)
   }
 
+  // Reports the language switch once the given player actually reaches the PLAYING state,
+  // rather than the instant playVideo() is called — calling onLanguageChange any earlier reveals
+  // this player (in callers like Player, which swap video visibility on this callback) while it's
+  // still showing YouTube's own paused/cued overlay, before it has any real frames to show. Falls
+  // back to reporting immediately when the player doesn't support waitUntilPlaying (e.g. bare
+  // test doubles, or admin's no-op onLanguageChange, where the timing doesn't matter). Exported
+  // for callers (like a manual "replay in English") that resume a player directly rather than
+  // through playSegment/watchForSegmentEnd below.
+  revealWhenPlaying(lang: DubLanguage, player: YouTubePlayerLike): void {
+    if (typeof player.waitUntilPlaying === 'function') {
+      player.waitUntilPlaying().then(() => this.onLanguageChange(lang))
+    } else {
+      this.onLanguageChange(lang)
+    }
+  }
+
   playSegment(lang: DubLanguage, segment: PlaybackSegment, onDone?: () => void): void {
     this.stop()
-    this.onLanguageChange(lang)
     const player = this.getPlayer(lang)
     this.playWithFade(player, segment.start)
+    this.revealWhenPlaying(lang, player)
 
     this.timer = setInterval(() => {
       if (player.getCurrentTime() >= segment.end) {
@@ -159,8 +176,8 @@ export class SegmentPlaybackController {
         this.stop()
         this.pauseWithFade(cantoPlayer).then(() => {
           this.playSegment('english', { start: segment.englishStart, end: segment.englishEnd }, () => {
-            this.onLanguageChange('canto')
             this.playWithFade(cantoPlayer, segment.cantoEnd)
+            this.revealWhenPlaying('canto', cantoPlayer)
             this.watchForSegmentEnd(segments, index + 1)
           })
         })

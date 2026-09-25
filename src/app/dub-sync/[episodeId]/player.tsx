@@ -109,8 +109,8 @@ export function Player({ episode, segments, episodes }: PlayerProps) {
     setReplayMessage(null)
     controllerRef.current?.pauseWithFade(cantoPlayer).then(() => {
       controllerRef.current?.playSegment('english', { start: segment.englishStart, end: segment.englishEnd }, () => {
-        setVisibleLanguage('canto')
         controllerRef.current?.playWithFade(cantoPlayer)
+        controllerRef.current?.revealWhenPlaying('canto', cantoPlayer)
       })
     })
   }

@@ -40,6 +40,34 @@ describe('SegmentPlaybackController', () => {
     expect(cantoPlayer.playVideo).toHaveBeenCalled()
   })
 
+  it('reports onLanguageChange immediately when the player has no waitUntilPlaying support', () => {
+    const cantoPlayer = makePlayer([10])
+    const onLanguageChange = vi.fn()
+    const controller = new SegmentPlaybackController(() => cantoPlayer, onLanguageChange, 100)
+    controller.playSegment('canto', { start: 10, end: 14 })
+    expect(onLanguageChange).toHaveBeenCalledWith('canto')
+  })
+
+  it('defers onLanguageChange until the player reports it is actually playing, so a swap does not reveal it mid-buffer', async () => {
+    // This is what stops a language switch from flashing YouTube's own paused/cued overlay:
+    // playVideo() alone doesn't mean the video has any real frames to show yet.
+    const cantoPlayer = makePlayer([10]) as YouTubePlayerLike & { waitUntilPlaying: () => Promise<void> }
+    let resolvePlaying: () => void = () => {}
+    cantoPlayer.waitUntilPlaying = () => new Promise((resolve) => (resolvePlaying = resolve))
+    const onLanguageChange = vi.fn()
+    const controller = new SegmentPlaybackController(() => cantoPlayer, onLanguageChange, 100)
+
+    controller.playSegment('canto', { start: 10, end: 14 })
+
+    expect(cantoPlayer.playVideo).toHaveBeenCalled()
+    expect(onLanguageChange).not.toHaveBeenCalled()
+
+    resolvePlaying()
+    await Promise.resolve()
+
+    expect(onLanguageChange).toHaveBeenCalledWith('canto')
+  })
+
   it('pauses once playback passes the segment end', async () => {
     const cantoPlayer = makePlayer([10, 11, 12, 15])
     const controller = new SegmentPlaybackController(() => cantoPlayer, vi.fn(), 100)

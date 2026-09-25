@@ -125,6 +125,40 @@ describe('YoutubePlayer', () => {
     expect(onEnded).not.toHaveBeenCalled()
   })
 
+  it('waitUntilPlaying resolves once the underlying player reports the PLAYING state', async () => {
+    const fakePlayer = makeFakePlayer()
+    const PlayerCtor = vi.fn(function PlayerCtor() { return fakePlayer })
+    vi.mocked(loadYoutubeIframeApi).mockResolvedValue({ Player: PlayerCtor as never })
+
+    const ref = createRef<YoutubePlayerHandle>()
+    render(<YoutubePlayer ref={ref} videoId="video-1" elementId="canto-player" />)
+    await waitFor(() => expect(PlayerCtor).toHaveBeenCalled())
+
+    const resolved = vi.fn()
+    ref.current?.waitUntilPlaying?.().then(resolved)
+    expect(resolved).not.toHaveBeenCalled()
+
+    PlayerCtor.mock.calls[0][1].events.onStateChange({ data: 1 }) // playing
+    await waitFor(() => expect(resolved).toHaveBeenCalled())
+  })
+
+  it('does not resolve waitUntilPlaying for other player states', async () => {
+    const fakePlayer = makeFakePlayer()
+    const PlayerCtor = vi.fn(function PlayerCtor() { return fakePlayer })
+    vi.mocked(loadYoutubeIframeApi).mockResolvedValue({ Player: PlayerCtor as never })
+
+    const ref = createRef<YoutubePlayerHandle>()
+    render(<YoutubePlayer ref={ref} videoId="video-1" elementId="canto-player" />)
+    await waitFor(() => expect(PlayerCtor).toHaveBeenCalled())
+
+    const resolved = vi.fn()
+    ref.current?.waitUntilPlaying?.().then(resolved)
+
+    PlayerCtor.mock.calls[0][1].events.onStateChange({ data: 0 }) // ended
+    await Promise.resolve()
+    expect(resolved).not.toHaveBeenCalled()
+  })
+
   it('calls the onError prop when the underlying player reports an error', async () => {
     const fakePlayer = makeFakePlayer()
     const PlayerCtor = vi.fn(function PlayerCtor() { return fakePlayer })
