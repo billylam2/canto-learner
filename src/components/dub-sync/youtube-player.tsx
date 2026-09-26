@@ -115,12 +115,20 @@ export const YoutubePlayer = forwardRef<YoutubePlayerHandle, YoutubePlayerProps>
   // brief gap between mounting and the IFrame API script loading and constructing the real
   // player (and again on every videoId/elementId change, e.g. switching episodes), this shows
   // either nothing or a raw unstyled flash rather than a clean transition to the real video.
+  //
+  // The opacity toggle lives on this OUTER div, never on the one with id={elementId} — the
+  // YouTube IFrame API replaces that inner element with its own iframe once constructed, so
+  // React's reference to it goes stale the moment that happens; any later state-driven update
+  // (like this one) would silently apply to the detached original node instead of the real,
+  // visible iframe. The outer div is never touched by that replacement, so its opacity reliably
+  // affects whatever ends up inside it.
   return (
     <div
-      id={elementId}
       data-testid={`youtube-player-${elementId}`}
       data-ready={ready}
       className={`transition-opacity duration-300 ${ready ? 'opacity-100' : 'opacity-0'}`}
-    />
+    >
+      <div id={elementId} />
+    </div>
   )
 })
