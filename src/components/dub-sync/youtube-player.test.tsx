@@ -55,6 +55,34 @@ describe('YoutubePlayer', () => {
     expect(screen.getByTestId('youtube-player-canto-player')).toHaveClass('opacity-100')
   })
 
+  it('still reveals correctly once ready even though the real IFrame API replaces the target element with its own iframe', async () => {
+    // The fake player above never touches the DOM, so it can't catch this: the real YouTube
+    // IFrame API replaces the element passed to `new Player(elementId, ...)` with its own iframe
+    // (carrying over that element's attributes as a one-time snapshot). A regression where the
+    // hidden-until-ready styling lived on that same element left every video permanently hidden
+    // in production — React's later onReady -> setReady(true) update landed on the detached
+    // original element, never on the real, visible replacement.
+    const fakePlayer = makeFakePlayer()
+    const PlayerCtor = vi.fn(function PlayerCtor(elementId: string) {
+      const target = document.getElementById(elementId)!
+      const iframe = document.createElement('iframe')
+      for (const attr of Array.from(target.attributes)) iframe.setAttribute(attr.name, attr.value)
+      target.replaceWith(iframe)
+      return fakePlayer
+    })
+    vi.mocked(loadYoutubeIframeApi).mockResolvedValue({ Player: PlayerCtor as never })
+
+    render(<YoutubePlayer videoId="video-1" elementId="canto-player" />)
+    await waitFor(() => expect(PlayerCtor).toHaveBeenCalled())
+
+    PlayerCtor.mock.calls[0][1].events.onReady()
+
+    await waitFor(() =>
+      expect(screen.getByTestId('youtube-player-canto-player')).toHaveAttribute('data-ready', 'true')
+    )
+    expect(screen.getByTestId('youtube-player-canto-player')).toHaveClass('opacity-100')
+  })
+
   it('hides itself again while switching to a different video, rather than staying visible from the previous one', async () => {
     const firstPlayer = makeFakePlayer()
     const PlayerCtor = vi.fn(function PlayerCtor() {
