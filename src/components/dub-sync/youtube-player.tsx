@@ -41,10 +41,6 @@ export const YoutubePlayer = forwardRef<YoutubePlayerHandle, YoutubePlayerProps>
 
   useEffect(() => {
     let cancelled = false
-    // Hidden again immediately on every videoId/elementId change (episode switches reuse this
-    // same component instance, so `ready` would otherwise still be true from the previous
-    // video while the new one's iframe hasn't even been constructed yet).
-    setReady(false)
     loadYoutubeIframeApi().then(({ Player }) => {
       if (cancelled) return
       playerRef.current = new Player(elementId, {
@@ -111,24 +107,5 @@ export const YoutubePlayer = forwardRef<YoutubePlayerHandle, YoutubePlayerProps>
     []
   )
 
-  // Hidden by default and until the underlying player is actually ready — otherwise, for the
-  // brief gap between mounting and the IFrame API script loading and constructing the real
-  // player (and again on every videoId/elementId change, e.g. switching episodes), this shows
-  // either nothing or a raw unstyled flash rather than a clean transition to the real video.
-  //
-  // The opacity toggle lives on this OUTER div, never on the one with id={elementId} — the
-  // YouTube IFrame API replaces that inner element with its own iframe once constructed, so
-  // React's reference to it goes stale the moment that happens; any later state-driven update
-  // (like this one) would silently apply to the detached original node instead of the real,
-  // visible iframe. The outer div is never touched by that replacement, so its opacity reliably
-  // affects whatever ends up inside it.
-  return (
-    <div
-      data-testid={`youtube-player-${elementId}`}
-      data-ready={ready}
-      className={`transition-opacity duration-300 ${ready ? 'opacity-100' : 'opacity-0'}`}
-    >
-      <div id={elementId} />
-    </div>
-  )
+  return <div id={elementId} data-testid={`youtube-player-${elementId}`} data-ready={ready} />
 })
