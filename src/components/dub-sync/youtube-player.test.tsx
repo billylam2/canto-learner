@@ -31,6 +31,9 @@ describe('YoutubePlayer', () => {
 
     render(<YoutubePlayer videoId="video-1" elementId="canto-player" />)
 
+    // Hidden by default — before the real player exists, there's nothing worth showing yet.
+    expect(screen.getByTestId('youtube-player-canto-player')).toHaveClass('opacity-0')
+
     await waitFor(() => expect(PlayerCtor).toHaveBeenCalled())
     expect(PlayerCtor.mock.calls[0][0]).toBe('canto-player')
     expect(PlayerCtor.mock.calls[0][1]).toMatchObject({
@@ -49,6 +52,24 @@ describe('YoutubePlayer', () => {
     await waitFor(() =>
       expect(screen.getByTestId('youtube-player-canto-player')).toHaveAttribute('data-ready', 'true')
     )
+    expect(screen.getByTestId('youtube-player-canto-player')).toHaveClass('opacity-100')
+  })
+
+  it('hides itself again while switching to a different video, rather than staying visible from the previous one', async () => {
+    const firstPlayer = makeFakePlayer()
+    const PlayerCtor = vi.fn(function PlayerCtor() {
+      return firstPlayer
+    })
+    vi.mocked(loadYoutubeIframeApi).mockResolvedValue({ Player: PlayerCtor as never })
+
+    const { rerender } = render(<YoutubePlayer videoId="video-1" elementId="canto-player" />)
+    await waitFor(() => expect(PlayerCtor).toHaveBeenCalledTimes(1))
+    PlayerCtor.mock.calls[0][1].events.onReady()
+    await waitFor(() => expect(screen.getByTestId('youtube-player-canto-player')).toHaveClass('opacity-100'))
+
+    rerender(<YoutubePlayer videoId="video-2" elementId="canto-player" />)
+
+    expect(screen.getByTestId('youtube-player-canto-player')).toHaveClass('opacity-0')
   })
 
   it('exposes an imperative handle that delegates to the underlying player', async () => {
