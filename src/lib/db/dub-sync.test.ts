@@ -3,10 +3,12 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   createEpisode,
   listEpisodes,
+  listPublishedEpisodes,
   getEpisode,
   updateEpisodeAnchors,
   updateEpisodeTitle,
   updateEpisodeVideoIds,
+  updateEpisodePublished,
   deleteEpisode,
   createSegment,
   createSegmentsBulk,
@@ -30,6 +32,7 @@ const episodeRow = {
   canto_content_end: null,
   english_content_start: null,
   english_content_end: null,
+  published: true,
 }
 
 function makeSingleMock(overrides: { single?: { data: unknown; error: unknown } }) {
@@ -59,6 +62,7 @@ describe('createEpisode', () => {
       cantoContentEnd: null,
       englishContentStart: null,
       englishContentEnd: null,
+      published: true,
     })
   })
 
@@ -91,6 +95,7 @@ describe('listEpisodes', () => {
         cantoContentEnd: null,
         englishContentStart: null,
         englishContentEnd: null,
+        published: true,
       },
     ])
   })
@@ -98,6 +103,40 @@ describe('listEpisodes', () => {
   it('throws when the query fails', async () => {
     const supabase = makeListMock({ data: null, error: { message: 'boom' } })
     await expect(listEpisodes(supabase)).rejects.toThrow('Failed to list episodes: boom')
+  })
+})
+
+function makePublishedListMock(overrides: { data: unknown; error: unknown }) {
+  const order = vi.fn().mockResolvedValue(overrides)
+  const eq = vi.fn().mockReturnValue({ order })
+  const select = vi.fn().mockReturnValue({ eq })
+  const from = vi.fn().mockReturnValue({ select })
+  return { from, eq } as unknown as SupabaseClient & { eq: typeof eq }
+}
+
+describe('listPublishedEpisodes', () => {
+  it('filters to published episodes only, mapped to camelCase', async () => {
+    const supabase = makePublishedListMock({ data: [episodeRow], error: null })
+    const result = await listPublishedEpisodes(supabase)
+    expect(result).toEqual([
+      {
+        id: 'ep-1',
+        title: 'Muddy Puddles',
+        cantoneseVideoId: 'canto-123',
+        englishVideoId: 'eng-456',
+        cantoContentStart: null,
+        cantoContentEnd: null,
+        englishContentStart: null,
+        englishContentEnd: null,
+        published: true,
+      },
+    ])
+    expect(supabase.eq).toHaveBeenCalledWith('published', true)
+  })
+
+  it('throws when the query fails', async () => {
+    const supabase = makePublishedListMock({ data: null, error: { message: 'boom' } })
+    await expect(listPublishedEpisodes(supabase)).rejects.toThrow('Failed to list published episodes: boom')
   })
 })
 
@@ -178,6 +217,23 @@ describe('updateEpisodeTitle', () => {
     const supabase = makeSingleMock({ single: { data: null, error: { message: 'boom' } } })
     await expect(updateEpisodeTitle(supabase, 'ep-1', 'New Title')).rejects.toThrow(
       'Failed to update title for episode ep-1: boom'
+    )
+  })
+})
+
+describe('updateEpisodePublished', () => {
+  it('returns the updated episode', async () => {
+    const supabase = makeSingleMock({
+      single: { data: { ...episodeRow, published: false }, error: null },
+    })
+    const result = await updateEpisodePublished(supabase, 'ep-1', false)
+    expect(result.published).toBe(false)
+  })
+
+  it('throws when the update fails', async () => {
+    const supabase = makeSingleMock({ single: { data: null, error: { message: 'boom' } } })
+    await expect(updateEpisodePublished(supabase, 'ep-1', true)).rejects.toThrow(
+      'Failed to update published state for episode ep-1: boom'
     )
   })
 })

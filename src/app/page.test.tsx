@@ -13,29 +13,29 @@ vi.mock('@/lib/supabase/client', () => ({
   createSupabaseServerClient: vi.fn(() => ({})),
 }))
 vi.mock('@/lib/db/dub-sync', () => ({
-  listEpisodes: vi.fn(),
+  listPublishedEpisodes: vi.fn(),
 }))
 
 import HomePage from './page'
-import { listEpisodes } from '@/lib/db/dub-sync'
+import { listPublishedEpisodes } from '@/lib/db/dub-sync'
 
 describe('HomePage', () => {
   beforeEach(() => {
     redirectMock.mockClear()
   })
 
-  it('redirects to the first episode when episodes exist', async () => {
-    vi.mocked(listEpisodes).mockResolvedValue([
-      { id: 'ep-a', title: 'A', cantoneseVideoId: 'c1', englishVideoId: 'e1', cantoContentStart: null, cantoContentEnd: null, englishContentStart: null, englishContentEnd: null },
-      { id: 'ep-b', title: 'B', cantoneseVideoId: 'c2', englishVideoId: 'e2', cantoContentStart: null, cantoContentEnd: null, englishContentStart: null, englishContentEnd: null },
+  it('redirects to the first published episode when published episodes exist', async () => {
+    vi.mocked(listPublishedEpisodes).mockResolvedValue([
+      { id: 'ep-a', title: 'A', cantoneseVideoId: 'c1', englishVideoId: 'e1', cantoContentStart: null, cantoContentEnd: null, englishContentStart: null, englishContentEnd: null, published: true },
+      { id: 'ep-b', title: 'B', cantoneseVideoId: 'c2', englishVideoId: 'e2', cantoContentStart: null, cantoContentEnd: null, englishContentStart: null, englishContentEnd: null, published: true },
     ])
 
     await expect(HomePage()).rejects.toThrow('REDIRECT:/dub-sync/ep-a')
     expect(redirectMock).toHaveBeenCalledWith('/dub-sync/ep-a')
   })
 
-  it('shows an empty message instead of redirecting when there are no episodes', async () => {
-    vi.mocked(listEpisodes).mockResolvedValue([])
+  it('shows an empty message instead of redirecting when there are no published episodes', async () => {
+    vi.mocked(listPublishedEpisodes).mockResolvedValue([])
 
     render(await HomePage())
 

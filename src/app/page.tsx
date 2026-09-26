@@ -1,16 +1,18 @@
 import { redirect } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase/client'
-import { listEpisodes } from '@/lib/db/dub-sync'
+import { listPublishedEpisodes } from '@/lib/db/dub-sync'
 
 export const metadata = {
   title: 'Peppa 豬',
 }
 
 // The playlist experience (episode + sidebar of every episode) lives at /dub-sync/[episodeId] —
-// this route just lands you on the first one, so / is a stable entry point.
+// this route just lands you on the first one, so / is a stable entry point. Only ever redirects
+// among published episodes — one still being set up in admin (segments, anchors, etc.) has no
+// way to be reached from here until it's published.
 export default async function HomePage() {
   const supabase = createSupabaseServerClient()
-  const episodes = await listEpisodes(supabase)
+  const episodes = await listPublishedEpisodes(supabase)
 
   if (episodes.length === 0) {
     return (

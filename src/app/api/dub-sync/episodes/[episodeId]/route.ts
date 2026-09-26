@@ -4,6 +4,7 @@ import {
   updateEpisodeAnchors,
   updateEpisodeTitle,
   updateEpisodeVideoIds,
+  updateEpisodePublished,
   deleteEpisode,
   type UpdateEpisodeVideoIdsInput,
 } from '@/lib/db/dub-sync'
@@ -24,6 +25,12 @@ export async function PATCH(
   if (typeof body?.title === 'string') {
     const supabase = createSupabaseServerClient()
     const episode = await updateEpisodeTitle(supabase, episodeId, body.title)
+    return NextResponse.json({ episode })
+  }
+
+  if (typeof body?.published === 'boolean') {
+    const supabase = createSupabaseServerClient()
+    const episode = await updateEpisodePublished(supabase, episodeId, body.published)
     return NextResponse.json({ episode })
   }
 

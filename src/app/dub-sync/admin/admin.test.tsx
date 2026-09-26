@@ -39,6 +39,7 @@ const episodeA = {
   cantoContentEnd: null,
   englishContentStart: null,
   englishContentEnd: null,
+  published: true,
 }
 const episodeB = {
   id: 'ep-b',
@@ -49,6 +50,7 @@ const episodeB = {
   cantoContentEnd: null,
   englishContentStart: null,
   englishContentEnd: null,
+  published: true,
 }
 
 function captureRefs() {
@@ -174,6 +176,30 @@ describe('Admin', () => {
     render(<Admin episodes={[episodeA]} segmentsByEpisode={{ 'ep-a': [] }} />)
     fireEvent.blur(screen.getByLabelText('Edit Cantonese video ID'))
     expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('toggles the published state and reflects it in the episode list label', async () => {
+    const unpublishedEpisode = { ...episodeA, published: false }
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ episode: { ...unpublishedEpisode, published: true } }),
+    } as Response)
+
+    render(<Admin episodes={[unpublishedEpisode]} segmentsByEpisode={{ 'ep-a': [] }} />)
+
+    expect(screen.getByText('(unpublished)')).toBeInTheDocument()
+    const checkbox = screen.getByRole('checkbox', { name: 'Published (visible on the main site)' })
+    expect(checkbox).not.toBeChecked()
+
+    fireEvent.click(checkbox)
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a',
+        expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ published: true }) })
+      )
+    )
+    await waitFor(() => expect(screen.queryByText('(unpublished)')).not.toBeInTheDocument())
   })
 
   it('deletes an episode after confirming, and selects a remaining one', async () => {

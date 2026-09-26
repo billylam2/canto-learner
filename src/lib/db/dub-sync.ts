@@ -10,6 +10,7 @@ export interface DubEpisode {
   cantoContentEnd: number | null
   englishContentStart: number | null
   englishContentEnd: number | null
+  published: boolean
 }
 
 interface DubEpisodeRow {
@@ -21,6 +22,7 @@ interface DubEpisodeRow {
   canto_content_end: number | null
   english_content_start: number | null
   english_content_end: number | null
+  published: boolean
 }
 
 function toDubEpisode(row: DubEpisodeRow): DubEpisode {
@@ -33,6 +35,7 @@ function toDubEpisode(row: DubEpisodeRow): DubEpisode {
     cantoContentEnd: row.canto_content_end,
     englishContentStart: row.english_content_start,
     englishContentEnd: row.english_content_end,
+    published: row.published,
   }
 }
 
@@ -60,6 +63,22 @@ export async function listEpisodes(supabase: SupabaseClient): Promise<DubEpisode
 
   if (error) {
     throw new Error(`Failed to list episodes: ${error.message}`)
+  }
+  return ((data ?? []) as DubEpisodeRow[]).map(toDubEpisode)
+}
+
+// Used by the learner-facing pages only — the admin tool always sees every episode (via
+// listEpisodes above) regardless of publish state, since it needs to work with an episode to
+// ever publish it in the first place.
+export async function listPublishedEpisodes(supabase: SupabaseClient): Promise<DubEpisode[]> {
+  const { data, error } = await supabase
+    .from('dub_episodes')
+    .select('*')
+    .eq('published', true)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    throw new Error(`Failed to list published episodes: ${error.message}`)
   }
   return ((data ?? []) as DubEpisodeRow[]).map(toDubEpisode)
 }
@@ -105,6 +124,24 @@ export async function updateEpisodeTitle(
 
   if (error || !data) {
     throw new Error(`Failed to update title for episode ${episodeId}: ${error?.message ?? 'unknown error'}`)
+  }
+  return toDubEpisode(data as DubEpisodeRow)
+}
+
+export async function updateEpisodePublished(
+  supabase: SupabaseClient,
+  episodeId: string,
+  published: boolean
+): Promise<DubEpisode> {
+  const { data, error } = await supabase
+    .from('dub_episodes')
+    .update({ published })
+    .eq('id', episodeId)
+    .select('*')
+    .single()
+
+  if (error || !data) {
+    throw new Error(`Failed to update published state for episode ${episodeId}: ${error?.message ?? 'unknown error'}`)
   }
   return toDubEpisode(data as DubEpisodeRow)
 }

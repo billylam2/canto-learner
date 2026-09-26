@@ -157,6 +157,19 @@ export function Admin({
     }
   }
 
+  async function togglePublished() {
+    if (!episode) return
+    const response = await fetch(`/api/dub-sync/episodes/${episode.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ published: !episode.published }),
+    })
+    if (response.ok) {
+      const { episode: updated } = await response.json()
+      updateEpisodeInPlace(updated)
+    }
+  }
+
   function handleEpisodeDeleted(deletedId: string) {
     setEpisodes((current) => current.filter((candidate) => candidate.id !== deletedId))
     setSegmentsByEpisode((current) => {
@@ -560,6 +573,7 @@ export function Admin({
                 className={`text-left w-full p-1 rounded ${candidate.id === selectedEpisodeId ? 'bg-gray-200' : ''}`}
               >
                 {candidate.title}
+                {!candidate.published && <span className="text-gray-500"> (unpublished)</span>}
               </button>
               <button
                 onClick={() => deleteEpisodeClicked(candidate.id, candidate.title)}
@@ -586,6 +600,10 @@ export function Admin({
               onBlur={saveTitle}
               className="text-2xl font-bold mb-4 border rounded p-1 w-full"
             />
+            <label className="flex items-center gap-2 mb-4">
+              <input type="checkbox" checked={episode.published} onChange={togglePublished} />
+              Published (visible on the main site)
+            </label>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
               <label className="flex flex-col gap-1">
                 Edit Cantonese video ID

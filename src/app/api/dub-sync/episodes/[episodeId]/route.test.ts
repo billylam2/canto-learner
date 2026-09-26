@@ -10,11 +10,18 @@ vi.mock('@/lib/db/dub-sync', () => ({
   updateEpisodeAnchors: vi.fn(),
   updateEpisodeTitle: vi.fn(),
   updateEpisodeVideoIds: vi.fn(),
+  updateEpisodePublished: vi.fn(),
   deleteEpisode: vi.fn(),
 }))
 
 import { PATCH, DELETE } from './route'
-import { updateEpisodeAnchors, updateEpisodeTitle, updateEpisodeVideoIds, deleteEpisode } from '@/lib/db/dub-sync'
+import {
+  updateEpisodeAnchors,
+  updateEpisodeTitle,
+  updateEpisodeVideoIds,
+  updateEpisodePublished,
+  deleteEpisode,
+} from '@/lib/db/dub-sync'
 
 async function adminCookieHeader(): Promise<string> {
   process.env.SESSION_SECRET = 'a'.repeat(32)
@@ -130,6 +137,30 @@ describe('PATCH /api/dub-sync/episodes/[episodeId]', () => {
 
     expect(response.status).toBe(200)
     expect(updateEpisodeVideoIds).toHaveBeenCalledWith(expect.anything(), 'ep-1', { englishVideoId: 'new-eng-id' })
+  })
+
+  it('updates the published state instead of anchors when published is given', async () => {
+    vi.mocked(updateEpisodePublished).mockResolvedValue({
+      id: 'ep-1',
+      title: 'Muddy Puddles',
+      cantoneseVideoId: 'canto-123',
+      englishVideoId: 'eng-456',
+      cantoContentStart: null,
+      cantoContentEnd: null,
+      englishContentStart: null,
+      englishContentEnd: null,
+      published: true,
+    })
+
+    const response = await PATCH(await makeRequest({ published: true }), {
+      params: Promise.resolve({ episodeId: 'ep-1' }),
+    })
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.episode.published).toBe(true)
+    expect(updateEpisodePublished).toHaveBeenCalledWith(expect.anything(), 'ep-1', true)
+    expect(updateEpisodeAnchors).not.toHaveBeenCalled()
   })
 
   it('rejects an unauthenticated request', async () => {
