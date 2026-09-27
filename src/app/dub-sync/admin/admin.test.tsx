@@ -40,6 +40,7 @@ const episodeA = {
   englishContentStart: null,
   englishContentEnd: null,
   published: true,
+  position: 0,
 }
 const episodeB = {
   id: 'ep-b',
@@ -51,6 +52,7 @@ const episodeB = {
   englishContentStart: null,
   englishContentEnd: null,
   published: true,
+  position: 1,
 }
 
 function captureRefs() {
@@ -200,6 +202,43 @@ describe('Admin', () => {
       )
     )
     await waitFor(() => expect(screen.queryByText('(unpublished)')).not.toBeInTheDocument())
+  })
+
+  it('disables the up arrow for the first episode and the down arrow for the last', () => {
+    render(<Admin episodes={[episodeA, episodeB]} segmentsByEpisode={{ 'ep-a': [], 'ep-b': [] }} />)
+
+    expect(screen.getByRole('button', { name: 'Move Muddy Puddles up' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Move Muddy Puddles down' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Move The Playgroup up' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Move The Playgroup down' })).toBeDisabled()
+  })
+
+  it('moves an episode down and reorders the sidebar from the response', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          episodes: [
+            { ...episodeA, position: 1 },
+            { ...episodeB, position: 0 },
+          ],
+        }),
+    } as Response)
+
+    render(<Admin episodes={[episodeA, episodeB]} segmentsByEpisode={{ 'ep-a': [], 'ep-b': [] }} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Muddy Puddles down' }))
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/dub-sync/episodes/ep-a',
+        expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ move: 'down' }) })
+      )
+    )
+    await waitFor(() => {
+      const titles = screen.getAllByRole('button', { name: /^(Muddy Puddles|The Playgroup)$/ }).map((el) => el.textContent)
+      expect(titles).toEqual(['The Playgroup', 'Muddy Puddles'])
+    })
   })
 
   it('deletes an episode after confirming, and selects a remaining one', async () => {

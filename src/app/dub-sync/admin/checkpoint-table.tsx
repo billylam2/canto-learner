@@ -84,7 +84,7 @@ function CheckpointRow({ episodeId, checkpoint, onUpdate, onDelete }: Checkpoint
           value={draft.cantoTime}
           onChange={(e) => setDraft({ ...draft, cantoTime: Number(e.target.value) })}
           onBlur={() => saveField('cantoTime')}
-          className="border p-1 rounded w-20"
+          className="border dark:border-gray-600 p-1 rounded w-20"
         />
       </td>
       <td>
@@ -93,15 +93,15 @@ function CheckpointRow({ episodeId, checkpoint, onUpdate, onDelete }: Checkpoint
           value={draft.englishTime}
           onChange={(e) => setDraft({ ...draft, englishTime: Number(e.target.value) })}
           onBlur={() => saveField('englishTime')}
-          className="border p-1 rounded w-20"
+          className="border dark:border-gray-600 p-1 rounded w-20"
         />
       </td>
       <td>
-        <button onClick={handleDelete} className="border p-1 rounded text-sm" title="Delete this checkpoint">
+        <button onClick={handleDelete} className="border dark:border-gray-600 p-1 rounded text-sm" title="Delete this checkpoint">
           Delete
         </button>
         {saveError && (
-          <p role="alert" className="text-red-600 text-xs mt-1">
+          <p role="alert" className="text-red-600 dark:text-red-400 text-xs mt-1">
             {saveError}
           </p>
         )}

@@ -14,7 +14,7 @@ export function EpisodeSidebar({ episodes, currentEpisodeId }: EpisodeSidebarPro
         <Link
           key={episode.id}
           href={`/dub-sync/${episode.id}`}
-          className={`flex items-start gap-2 p-2 rounded ${episode.id === currentEpisodeId ? 'bg-gray-200' : ''}`}
+          className={`flex items-start gap-2 p-2 rounded ${episode.id === currentEpisodeId ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
         >
           <Image
             src={`https://i.ytimg.com/vi/${episode.cantoneseVideoId}/mqdefault.jpg`}

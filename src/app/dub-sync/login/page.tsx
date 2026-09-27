@@ -39,15 +39,19 @@ export default function DubSyncLoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="border p-2 rounded"
+            className="border dark:border-gray-600 dark:bg-gray-800 p-2 rounded"
           />
         </label>
         {error && (
-          <p role="alert" className="text-red-600">
+          <p role="alert" className="text-red-600 dark:text-red-400">
             {error}
           </p>
         )}
-        <button type="submit" disabled={submitting} className="border p-2 rounded bg-gray-800 text-white">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="border dark:border-gray-600 p-2 rounded bg-gray-800 dark:bg-gray-700 text-white"
+        >
           {submitting ? 'Logging in…' : 'Log in'}
         </button>
       </form>

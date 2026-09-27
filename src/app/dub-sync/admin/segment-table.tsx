@@ -91,7 +91,7 @@ function SegmentRow({ episodeId, segment, onUpdate, onDelete, onPlay }: SegmentR
           value={draft.label ?? ''}
           onChange={(e) => setDraft({ ...draft, label: e.target.value })}
           onBlur={() => saveField('label')}
-          className="border p-1 rounded w-full"
+          className="border dark:border-gray-600 p-1 rounded w-full"
         />
       </td>
       <td>
@@ -100,7 +100,7 @@ function SegmentRow({ episodeId, segment, onUpdate, onDelete, onPlay }: SegmentR
           value={draft.cantoStart}
           onChange={(e) => setDraft({ ...draft, cantoStart: Number(e.target.value) })}
           onBlur={() => saveField('cantoStart')}
-          className="border p-1 rounded w-20"
+          className="border dark:border-gray-600 p-1 rounded w-20"
         />
       </td>
       <td>
@@ -109,7 +109,7 @@ function SegmentRow({ episodeId, segment, onUpdate, onDelete, onPlay }: SegmentR
           value={draft.cantoEnd}
           onChange={(e) => setDraft({ ...draft, cantoEnd: Number(e.target.value) })}
           onBlur={() => saveField('cantoEnd')}
-          className="border p-1 rounded w-20"
+          className="border dark:border-gray-600 p-1 rounded w-20"
         />
       </td>
       <td>
@@ -118,7 +118,7 @@ function SegmentRow({ episodeId, segment, onUpdate, onDelete, onPlay }: SegmentR
           value={draft.englishStart}
           onChange={(e) => setDraft({ ...draft, englishStart: Number(e.target.value) })}
           onBlur={() => saveField('englishStart')}
-          className="border p-1 rounded w-20"
+          className="border dark:border-gray-600 p-1 rounded w-20"
         />
       </td>
       <td>
@@ -127,22 +127,22 @@ function SegmentRow({ episodeId, segment, onUpdate, onDelete, onPlay }: SegmentR
           value={draft.englishEnd}
           onChange={(e) => setDraft({ ...draft, englishEnd: Number(e.target.value) })}
           onBlur={() => saveField('englishEnd')}
-          className="border p-1 rounded w-20"
+          className="border dark:border-gray-600 p-1 rounded w-20"
         />
       </td>
       <td>
         <button
           onClick={() => onPlay(segment)}
-          className="border p-1 rounded text-sm"
+          className="border dark:border-gray-600 p-1 rounded text-sm"
           title="Play this segment: Cantonese then English"
         >
           Play
         </button>
-        <button onClick={handleDelete} className="border p-1 rounded text-sm" title="Delete this segment">
+        <button onClick={handleDelete} className="border dark:border-gray-600 p-1 rounded text-sm" title="Delete this segment">
           Delete
         </button>
         {saveError && (
-          <p role="alert" className="text-red-600 text-xs mt-1">
+          <p role="alert" className="text-red-600 dark:text-red-400 text-xs mt-1">
             {saveError}
           </p>
         )}

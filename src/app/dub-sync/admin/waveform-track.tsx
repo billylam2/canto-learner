@@ -206,7 +206,7 @@ export function WaveformTrack({
     <div className="flex items-center gap-1">
       <button
         onClick={() => onViewStartChange(Math.max(0, viewStartSeconds - panStepSeconds))}
-        className="border p-1 rounded shrink-0"
+        className="border dark:border-gray-600 p-1 rounded shrink-0"
         title="Scroll the waveform left"
       >
         ◀
@@ -234,7 +234,7 @@ export function WaveformTrack({
       />
       <button
         onClick={() => onViewStartChange(viewStartSeconds + panStepSeconds)}
-        className="border p-1 rounded shrink-0"
+        className="border dark:border-gray-600 p-1 rounded shrink-0"
         title="Scroll the waveform right"
       >
         ▶

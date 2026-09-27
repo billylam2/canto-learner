@@ -34,6 +34,7 @@ const publishedEpisode = {
   englishContentStart: null,
   englishContentEnd: null,
   published: true,
+  position: 0,
 }
 
 function makeParams(episodeId: string) {

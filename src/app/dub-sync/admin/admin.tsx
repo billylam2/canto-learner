@@ -170,6 +170,22 @@ export function Admin({
     }
   }
 
+  async function moveEpisodeClicked(id: string, direction: 'up' | 'down') {
+    const response = await fetch(`/api/dub-sync/episodes/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ move: direction }),
+    })
+    if (response.ok) {
+      const { episodes: updated } = await response.json()
+      setEpisodes((current) => {
+        const byId = new Map(current.map((candidate) => [candidate.id, candidate]))
+        for (const updatedEpisode of updated as DubEpisode[]) byId.set(updatedEpisode.id, updatedEpisode)
+        return [...byId.values()].sort((a, b) => a.position - b.position)
+      })
+    }
+  }
+
   function handleEpisodeDeleted(deletedId: string) {
     setEpisodes((current) => current.filter((candidate) => candidate.id !== deletedId))
     setSegmentsByEpisode((current) => {
@@ -566,18 +582,34 @@ export function Admin({
       <aside className="w-64 flex flex-col gap-2">
         <h2 className="font-bold">Episodes</h2>
         <ul className="flex flex-col gap-1">
-          {episodes.map((candidate) => (
+          {episodes.map((candidate, index) => (
             <li key={candidate.id} className="flex items-center gap-1">
               <button
+                onClick={() => moveEpisodeClicked(candidate.id, 'up')}
+                disabled={index === 0}
+                aria-label={`Move ${candidate.title} up`}
+                className="border dark:border-gray-600 rounded px-1 text-xs shrink-0 disabled:opacity-30"
+              >
+                ▲
+              </button>
+              <button
+                onClick={() => moveEpisodeClicked(candidate.id, 'down')}
+                disabled={index === episodes.length - 1}
+                aria-label={`Move ${candidate.title} down`}
+                className="border dark:border-gray-600 rounded px-1 text-xs shrink-0 disabled:opacity-30"
+              >
+                ▼
+              </button>
+              <button
                 onClick={() => selectEpisode(candidate.id)}
-                className={`text-left w-full p-1 rounded ${candidate.id === selectedEpisodeId ? 'bg-gray-200' : ''}`}
+                className={`text-left w-full p-1 rounded ${candidate.id === selectedEpisodeId ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
               >
                 {candidate.title}
-                {!candidate.published && <span className="text-gray-500"> (unpublished)</span>}
+                {!candidate.published && <span className="text-gray-500 dark:text-gray-400"> (unpublished)</span>}
               </button>
               <button
                 onClick={() => deleteEpisodeClicked(candidate.id, candidate.title)}
-                className="border p-1 rounded text-xs shrink-0"
+                className="border dark:border-gray-600 p-1 rounded text-xs shrink-0"
                 title="Delete this episode and all its segments and checkpoints"
               >
                 Delete
@@ -590,7 +622,7 @@ export function Admin({
 
       <main className="flex-1">
         {!episode ? (
-          <p className="text-gray-500">No episode selected.</p>
+          <p className="text-gray-500 dark:text-gray-400">No episode selected.</p>
         ) : (
           <>
             <input
@@ -598,7 +630,7 @@ export function Admin({
               value={titleDraft}
               onChange={(e) => setTitleDraft(e.target.value)}
               onBlur={saveTitle}
-              className="text-2xl font-bold mb-4 border rounded p-1 w-full"
+              className="text-2xl font-bold mb-4 border dark:border-gray-600 dark:bg-gray-800 rounded p-1 w-full"
             />
             <label className="flex items-center gap-2 mb-4">
               <input type="checkbox" checked={episode.published} onChange={togglePublished} />
@@ -611,7 +643,7 @@ export function Admin({
                   value={cantoVideoIdDraft}
                   onChange={(e) => setCantoVideoIdDraft(e.target.value)}
                   onBlur={() => saveVideoId('cantoneseVideoId', cantoVideoIdDraft)}
-                  className="border p-1 rounded"
+                  className="border dark:border-gray-600 p-1 rounded"
                 />
               </label>
               <label className="flex flex-col gap-1">
@@ -620,16 +652,16 @@ export function Admin({
                   value={englishVideoIdDraft}
                   onChange={(e) => setEnglishVideoIdDraft(e.target.value)}
                   onBlur={() => saveVideoId('englishVideoId', englishVideoIdDraft)}
-                  className="border p-1 rounded"
+                  className="border dark:border-gray-600 p-1 rounded"
                 />
               </label>
             </div>
-            {!anchorsSet && <p className="text-gray-500 mb-4">Set anchors before marking segments.</p>}
+            {!anchorsSet && <p className="text-gray-500 dark:text-gray-400 mb-4">Set anchors before marking segments.</p>}
 
             <div className="flex gap-2 mb-4">
               <button
                 onClick={() => setMarkingMode('spacebar')}
-                className={`border p-2 rounded ${markingMode === 'spacebar' ? 'bg-gray-800 text-white' : ''}`}
+                className={`border dark:border-gray-600 p-2 rounded ${markingMode === 'spacebar' ? 'bg-gray-800 text-white' : ''}`}
                 title="Mark segments by holding SPACE during synced playback"
               >
                 Spacebar marking
@@ -637,7 +669,7 @@ export function Admin({
               <button
                 onClick={() => setMarkingMode('waveform')}
                 disabled={!anchorsSet}
-                className={`border p-2 rounded ${markingMode === 'waveform' ? 'bg-gray-800 text-white' : ''}`}
+                className={`border dark:border-gray-600 p-2 rounded ${markingMode === 'waveform' ? 'bg-gray-800 text-white' : ''}`}
                 title="Mark segments by dragging over each dub's audio waveform"
               >
                 Waveform marking
@@ -645,7 +677,7 @@ export function Admin({
               <button
                 onClick={runGenerateWaveforms}
                 disabled={generatingWaveforms}
-                className="border p-2 rounded"
+                className="border dark:border-gray-600 p-2 rounded"
                 title="Download both videos' audio and compute waveform previews for waveform marking"
               >
                 {generatingWaveforms ? 'Generating…' : 'Generate waveforms'}
@@ -653,7 +685,7 @@ export function Admin({
             </div>
 
             {waveformsError && (
-              <p role="alert" className="text-red-600 mb-4">
+              <p role="alert" className="text-red-600 dark:text-red-400 mb-4">
                 {waveformsError}
               </p>
             )}
@@ -662,7 +694,7 @@ export function Admin({
               <button
                 onClick={() => (syncing ? stopSyncedPlayback() : startSyncedPlayback())}
                 disabled={!anchorsSet}
-                className="border p-2 rounded"
+                className="border dark:border-gray-600 p-2 rounded"
                 title="Play both videos together, auto-correcting English position to stay in sync"
               >
                 {syncing ? 'Pause synced' : 'Play synced'}
@@ -670,7 +702,7 @@ export function Admin({
               <button
                 onClick={goToContentStart}
                 disabled={!anchorsSet}
-                className="border p-2 rounded"
+                className="border dark:border-gray-600 p-2 rounded"
                 title="Jump both videos to their marked content start and begin synced playback"
               >
                 Go to content start
@@ -678,7 +710,7 @@ export function Admin({
               <button
                 onClick={enterCheckpointAdjustment}
                 disabled={!anchorsSet}
-                className="border p-2 rounded"
+                className="border dark:border-gray-600 p-2 rounded"
                 title="Pause and manually correct the English position to fix drift from here onward"
               >
                 Resync checkpoint
@@ -686,68 +718,68 @@ export function Admin({
             </div>
 
             {markingMode === 'spacebar' && syncing && !adjustingCheckpoint && (
-              <p className="text-gray-500 mb-4">Hold SPACE while a character is speaking, release when they stop.</p>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">Hold SPACE while a character is speaking, release when they stop.</p>
             )}
 
             {adjustingCheckpoint && (
-              <div className="border p-2 rounded mb-4 flex flex-col gap-2">
-                <p className="text-gray-500">Nudge the English video to match, then confirm.</p>
+              <div className="border dark:border-gray-600 p-2 rounded mb-4 flex flex-col gap-2">
+                <p className="text-gray-500 dark:text-gray-400">Nudge the English video to match, then confirm.</p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => nudgeEnglish(-0.5)}
-                    className="border p-1 rounded"
+                    className="border dark:border-gray-600 p-1 rounded"
                     title="Shift the English video back by 0.5s"
                   >
                     -0.5s
                   </button>
                   <button
                     onClick={() => nudgeEnglish(-0.1)}
-                    className="border p-1 rounded"
+                    className="border dark:border-gray-600 p-1 rounded"
                     title="Shift the English video back by 0.1s"
                   >
                     -0.1s
                   </button>
                   <button
                     onClick={() => nudgeEnglish(0.1)}
-                    className="border p-1 rounded"
+                    className="border dark:border-gray-600 p-1 rounded"
                     title="Shift the English video forward by 0.1s"
                   >
                     +0.1s
                   </button>
                   <button
                     onClick={() => nudgeEnglish(0.5)}
-                    className="border p-1 rounded"
+                    className="border dark:border-gray-600 p-1 rounded"
                     title="Shift the English video forward by 0.5s"
                   >
                     +0.5s
                   </button>
                   <button
                     onClick={previewPlay}
-                    className="border p-1 rounded"
+                    className="border dark:border-gray-600 p-1 rounded"
                     title="Play both videos from their current position to check alignment"
                   >
                     Preview play
                   </button>
-                  <button onClick={previewPause} className="border p-1 rounded" title="Pause both videos">
+                  <button onClick={previewPause} className="border dark:border-gray-600 p-1 rounded" title="Pause both videos">
                     Preview pause
                   </button>
                   <button
                     onClick={confirmCheckpoint}
-                    className="border p-1 rounded"
+                    className="border dark:border-gray-600 p-1 rounded"
                     title="Save this correction as a resync checkpoint"
                   >
                     Confirm
                   </button>
                   <button
                     onClick={cancelCheckpointAdjustment}
-                    className="border p-1 rounded"
+                    className="border dark:border-gray-600 p-1 rounded"
                     title="Discard this correction without saving"
                   >
                     Cancel
                   </button>
                 </div>
                 {checkpointError && (
-                  <p role="alert" className="text-red-600">
+                  <p role="alert" className="text-red-600 dark:text-red-400">
                     {checkpointError}
                   </p>
                 )}
@@ -765,14 +797,14 @@ export function Admin({
                 <div className="flex gap-2 mt-2">
                   <button
                     onClick={markCantoStart}
-                    className="border p-1 rounded"
+                    className="border dark:border-gray-600 p-1 rounded"
                     title="Set this video's content start to the current playback position"
                   >
                     Mark content start
                   </button>
                   <button
                     onClick={markCantoEnd}
-                    className="border p-1 rounded"
+                    className="border dark:border-gray-600 p-1 rounded"
                     title="Set this video's content end to the current playback position"
                   >
                     Mark content end
@@ -792,14 +824,14 @@ export function Admin({
                 <div className="flex gap-2 mt-2">
                   <button
                     onClick={markEnglishStart}
-                    className="border p-1 rounded"
+                    className="border dark:border-gray-600 p-1 rounded"
                     title="Set this video's content start to the current playback position"
                   >
                     Mark content start
                   </button>
                   <button
                     onClick={markEnglishEnd}
-                    className="border p-1 rounded"
+                    className="border dark:border-gray-600 p-1 rounded"
                     title="Set this video's content end to the current playback position"
                   >
                     Mark content end

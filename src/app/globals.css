@@ -1,5 +1,10 @@
 @import 'tailwindcss';
 
+/* Dark mode is a manual toggle (a `dark` class on <html>, flipped by ThemeToggle and persisted to
+   localStorage), not the OS preference — Tailwind v4 defaults `dark:` to prefers-color-scheme, so
+   it needs to be repointed at the class explicitly. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-brand-primary: #FF5A5F;
   --color-brand-secondary: #4DABF7;
@@ -12,4 +17,10 @@
 
 body {
   background-color: var(--color-brand-bg);
+  color: var(--color-brand-ink);
+}
+
+:root.dark body {
+  background-color: #17171a;
+  color: #f2f2f0;
 }

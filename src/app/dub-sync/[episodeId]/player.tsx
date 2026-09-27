@@ -178,7 +178,7 @@ export function Player({ episode, segments, episodes }: PlayerProps) {
         </div>
 
         {playerError && (
-          <p role="alert" className="text-red-600 my-2">
+          <p role="alert" className="text-red-600 dark:text-red-400 my-2">
             {playerError}
           </p>
         )}
@@ -192,18 +192,22 @@ export function Player({ episode, segments, episodes }: PlayerProps) {
         {!isFullscreen && (
           <div>
             <div className="flex gap-2">
-              <button onClick={replayInEnglish} disabled={alternating} className="border p-2 rounded my-4">
+              <button
+                onClick={replayInEnglish}
+                disabled={alternating}
+                className="border dark:border-gray-600 p-2 rounded my-4"
+              >
                 Replay in English
               </button>
-              <button onClick={toggleAlternating} className="border p-2 rounded my-4">
+              <button onClick={toggleAlternating} className="border dark:border-gray-600 p-2 rounded my-4">
                 {alternating ? 'Stop alternating' : 'Play alternating'}
               </button>
-              <button onClick={toggleFullscreen} className="border p-2 rounded my-4">
+              <button onClick={toggleFullscreen} className="border dark:border-gray-600 p-2 rounded my-4">
                 Fullscreen
               </button>
             </div>
 
-            {replayMessage && <p className="text-gray-600">{replayMessage}</p>}
+            {replayMessage && <p className="text-gray-600 dark:text-gray-400">{replayMessage}</p>}
           </div>
         )}
         {isFullscreen && !nativeFullscreenActive && (

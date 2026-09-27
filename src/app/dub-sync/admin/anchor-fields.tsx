@@ -27,7 +27,7 @@ export function AnchorFields({ start, end, onSaveStart, onSaveEnd }: AnchorField
   }
 
   return (
-    <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
       <label>
         Start
         <input
@@ -38,7 +38,7 @@ export function AnchorFields({ start, end, onSaveStart, onSaveEnd }: AnchorField
           onBlur={() => {
             if (draftStart !== start) onSaveStart(draftStart)
           }}
-          className="border p-1 rounded w-20 ml-1"
+          className="border dark:border-gray-600 p-1 rounded w-20 ml-1"
         />
       </label>
       ·
@@ -52,7 +52,7 @@ export function AnchorFields({ start, end, onSaveStart, onSaveEnd }: AnchorField
           onBlur={() => {
             if (draftEnd !== end) onSaveEnd(draftEnd)
           }}
-          className="border p-1 rounded w-20 ml-1"
+          className="border dark:border-gray-600 p-1 rounded w-20 ml-1"
         />
       </label>
     </p>

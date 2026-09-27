@@ -63,7 +63,7 @@ export function NewEpisodeForm({ onCreated }: NewEpisodeFormProps) {
           value={title}
           onChange={(e) => handleTitleChange(e.target.value)}
           required
-          className="border p-2 rounded"
+          className="border dark:border-gray-600 p-2 rounded"
         />
       </label>
       <label className="flex flex-col gap-1">
@@ -72,7 +72,7 @@ export function NewEpisodeForm({ onCreated }: NewEpisodeFormProps) {
           value={cantoneseVideoId}
           onChange={(e) => setCantoneseVideoId(e.target.value)}
           required
-          className="border p-2 rounded"
+          className="border dark:border-gray-600 p-2 rounded"
         />
       </label>
       <label className="flex flex-col gap-1">
@@ -82,15 +82,15 @@ export function NewEpisodeForm({ onCreated }: NewEpisodeFormProps) {
           onChange={(e) => setEnglishVideoId(e.target.value)}
           onBlur={handleEnglishVideoIdBlur}
           required
-          className="border p-2 rounded"
+          className="border dark:border-gray-600 p-2 rounded"
         />
       </label>
       {error && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="text-red-600 dark:text-red-400">
           {error}
         </p>
       )}
-      <button type="submit" disabled={submitting} className="border p-2 rounded bg-gray-800 text-white">
+      <button type="submit" disabled={submitting} className="border dark:border-gray-600 p-2 rounded bg-gray-800 text-white">
         {submitting ? 'Adding…' : 'Add episode'}
       </button>
     </form>

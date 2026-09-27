@@ -11,6 +11,7 @@ export interface DubEpisode {
   englishContentStart: number | null
   englishContentEnd: number | null
   published: boolean
+  position: number
 }
 
 interface DubEpisodeRow {
@@ -23,6 +24,7 @@ interface DubEpisodeRow {
   english_content_start: number | null
   english_content_end: number | null
   published: boolean
+  position: number
 }
 
 function toDubEpisode(row: DubEpisodeRow): DubEpisode {
@@ -36,6 +38,7 @@ function toDubEpisode(row: DubEpisodeRow): DubEpisode {
     englishContentStart: row.english_content_start,
     englishContentEnd: row.english_content_end,
     published: row.published,
+    position: row.position,
   }
 }
 
@@ -45,10 +48,30 @@ export interface CreateEpisodeInput {
   englishVideoId: string
 }
 
-export async function createEpisode(supabase: SupabaseClient, input: CreateEpisodeInput): Promise<DubEpisode> {
+async function getNextEpisodePosition(supabase: SupabaseClient): Promise<number> {
   const { data, error } = await supabase
     .from('dub_episodes')
-    .insert({ title: input.title, cantonese_video_id: input.cantoneseVideoId, english_video_id: input.englishVideoId })
+    .select('position')
+    .order('position', { ascending: false })
+    .limit(1)
+
+  if (error) {
+    throw new Error(`Failed to determine next episode position: ${error.message}`)
+  }
+  const rows = (data ?? []) as Array<{ position: number }>
+  return rows.length > 0 ? rows[0].position + 1 : 0
+}
+
+export async function createEpisode(supabase: SupabaseClient, input: CreateEpisodeInput): Promise<DubEpisode> {
+  const position = await getNextEpisodePosition(supabase)
+  const { data, error } = await supabase
+    .from('dub_episodes')
+    .insert({
+      title: input.title,
+      cantonese_video_id: input.cantoneseVideoId,
+      english_video_id: input.englishVideoId,
+      position,
+    })
     .select('*')
     .single()
 
@@ -59,7 +82,7 @@ export async function createEpisode(supabase: SupabaseClient, input: CreateEpiso
 }
 
 export async function listEpisodes(supabase: SupabaseClient): Promise<DubEpisode[]> {
-  const { data, error } = await supabase.from('dub_episodes').select('*').order('created_at', { ascending: true })
+  const { data, error } = await supabase.from('dub_episodes').select('*').order('position', { ascending: true })
 
   if (error) {
     throw new Error(`Failed to list episodes: ${error.message}`)
@@ -75,12 +98,51 @@ export async function listPublishedEpisodes(supabase: SupabaseClient): Promise<D
     .from('dub_episodes')
     .select('*')
     .eq('published', true)
-    .order('created_at', { ascending: true })
+    .order('position', { ascending: true })
 
   if (error) {
     throw new Error(`Failed to list published episodes: ${error.message}`)
   }
   return ((data ?? []) as DubEpisodeRow[]).map(toDubEpisode)
+}
+
+// Swaps the given episode's position with its immediate neighbor in display order. No-ops (and
+// returns just the one episode) if it's already at that end of the list. Two separate updates
+// rather than a single query — position has no uniqueness constraint, so there's no transient
+// conflict between them to worry about.
+export async function moveEpisode(
+  supabase: SupabaseClient,
+  episodeId: string,
+  direction: 'up' | 'down'
+): Promise<DubEpisode[]> {
+  const { data, error } = await supabase.from('dub_episodes').select('*').order('position', { ascending: true })
+  if (error) {
+    throw new Error(`Failed to list episodes: ${error.message}`)
+  }
+  const rows = (data ?? []) as DubEpisodeRow[]
+  const index = rows.findIndex((row) => row.id === episodeId)
+  if (index === -1) {
+    throw new Error(`Episode ${episodeId} not found`)
+  }
+
+  const neighborIndex = direction === 'up' ? index - 1 : index + 1
+  if (neighborIndex < 0 || neighborIndex >= rows.length) {
+    return [toDubEpisode(rows[index])]
+  }
+
+  const current = rows[index]
+  const neighbor = rows[neighborIndex]
+  const [currentUpdate, neighborUpdate] = await Promise.all([
+    supabase.from('dub_episodes').update({ position: neighbor.position }).eq('id', current.id).select('*').single(),
+    supabase.from('dub_episodes').update({ position: current.position }).eq('id', neighbor.id).select('*').single(),
+  ])
+
+  if (currentUpdate.error || !currentUpdate.data || neighborUpdate.error || !neighborUpdate.data) {
+    throw new Error(
+      `Failed to move episode ${episodeId}: ${currentUpdate.error?.message ?? neighborUpdate.error?.message ?? 'unknown error'}`
+    )
+  }
+  return [toDubEpisode(currentUpdate.data as DubEpisodeRow), toDubEpisode(neighborUpdate.data as DubEpisodeRow)]
 }
 
 export async function getEpisode(supabase: SupabaseClient, episodeId: string): Promise<DubEpisode | null> {

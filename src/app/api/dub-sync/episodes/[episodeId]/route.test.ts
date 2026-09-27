@@ -11,6 +11,7 @@ vi.mock('@/lib/db/dub-sync', () => ({
   updateEpisodeTitle: vi.fn(),
   updateEpisodeVideoIds: vi.fn(),
   updateEpisodePublished: vi.fn(),
+  moveEpisode: vi.fn(),
   deleteEpisode: vi.fn(),
 }))
 
@@ -20,6 +21,7 @@ import {
   updateEpisodeTitle,
   updateEpisodeVideoIds,
   updateEpisodePublished,
+  moveEpisode,
   deleteEpisode,
 } from '@/lib/db/dub-sync'
 
@@ -50,6 +52,8 @@ describe('PATCH /api/dub-sync/episodes/[episodeId]', () => {
       cantoContentEnd: 110,
       englishContentStart: 20,
       englishContentEnd: 220,
+      published: true,
+      position: 0,
     })
 
     const response = await PATCH(
@@ -83,6 +87,8 @@ describe('PATCH /api/dub-sync/episodes/[episodeId]', () => {
       cantoContentEnd: null,
       englishContentStart: null,
       englishContentEnd: null,
+      published: true,
+      position: 0,
     })
 
     const response = await PATCH(await makeRequest({ title: 'New Title' }), {
@@ -106,6 +112,8 @@ describe('PATCH /api/dub-sync/episodes/[episodeId]', () => {
       cantoContentEnd: null,
       englishContentStart: null,
       englishContentEnd: null,
+      published: true,
+      position: 0,
     })
 
     const response = await PATCH(await makeRequest({ cantoneseVideoId: 'new-canto-id' }), {
@@ -129,6 +137,8 @@ describe('PATCH /api/dub-sync/episodes/[episodeId]', () => {
       cantoContentEnd: null,
       englishContentStart: null,
       englishContentEnd: null,
+      published: true,
+      position: 0,
     })
 
     const response = await PATCH(await makeRequest({ englishVideoId: 'new-eng-id' }), {
@@ -150,6 +160,7 @@ describe('PATCH /api/dub-sync/episodes/[episodeId]', () => {
       englishContentStart: null,
       englishContentEnd: null,
       published: true,
+      position: 0,
     })
 
     const response = await PATCH(await makeRequest({ published: true }), {
@@ -160,6 +171,45 @@ describe('PATCH /api/dub-sync/episodes/[episodeId]', () => {
     const body = await response.json()
     expect(body.episode.published).toBe(true)
     expect(updateEpisodePublished).toHaveBeenCalledWith(expect.anything(), 'ep-1', true)
+    expect(updateEpisodeAnchors).not.toHaveBeenCalled()
+  })
+
+  it('moves the episode instead of updating anchors when move is given', async () => {
+    vi.mocked(moveEpisode).mockResolvedValue([
+      {
+        id: 'ep-1',
+        title: 'Muddy Puddles',
+        cantoneseVideoId: 'canto-123',
+        englishVideoId: 'eng-456',
+        cantoContentStart: null,
+        cantoContentEnd: null,
+        englishContentStart: null,
+        englishContentEnd: null,
+        published: true,
+        position: 0,
+      },
+      {
+        id: 'ep-2',
+        title: 'Muddy Puddles 2',
+        cantoneseVideoId: 'canto-789',
+        englishVideoId: 'eng-012',
+        cantoContentStart: null,
+        cantoContentEnd: null,
+        englishContentStart: null,
+        englishContentEnd: null,
+        published: true,
+        position: 1,
+      },
+    ])
+
+    const response = await PATCH(await makeRequest({ move: 'up' }), {
+      params: Promise.resolve({ episodeId: 'ep-1' }),
+    })
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.episodes).toHaveLength(2)
+    expect(moveEpisode).toHaveBeenCalledWith(expect.anything(), 'ep-1', 'up')
     expect(updateEpisodeAnchors).not.toHaveBeenCalled()
   })
 

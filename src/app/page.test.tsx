@@ -26,8 +26,8 @@ describe('HomePage', () => {
 
   it('redirects to the first published episode when published episodes exist', async () => {
     vi.mocked(listPublishedEpisodes).mockResolvedValue([
-      { id: 'ep-a', title: 'A', cantoneseVideoId: 'c1', englishVideoId: 'e1', cantoContentStart: null, cantoContentEnd: null, englishContentStart: null, englishContentEnd: null, published: true },
-      { id: 'ep-b', title: 'B', cantoneseVideoId: 'c2', englishVideoId: 'e2', cantoContentStart: null, cantoContentEnd: null, englishContentStart: null, englishContentEnd: null, published: true },
+      { id: 'ep-a', title: 'A', cantoneseVideoId: 'c1', englishVideoId: 'e1', cantoContentStart: null, cantoContentEnd: null, englishContentStart: null, englishContentEnd: null, published: true, position: 0 },
+      { id: 'ep-b', title: 'B', cantoneseVideoId: 'c2', englishVideoId: 'e2', cantoContentStart: null, cantoContentEnd: null, englishContentStart: null, englishContentEnd: null, published: true, position: 1 },
     ])
 
     await expect(HomePage()).rejects.toThrow('REDIRECT:/dub-sync/ep-a')

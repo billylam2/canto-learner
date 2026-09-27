@@ -9,6 +9,7 @@ import {
   updateEpisodeTitle,
   updateEpisodeVideoIds,
   updateEpisodePublished,
+  moveEpisode,
   deleteEpisode,
   createSegment,
   createSegmentsBulk,
@@ -33,15 +34,20 @@ const episodeRow = {
   english_content_start: null,
   english_content_end: null,
   published: true,
+  position: 0,
 }
 
-function makeSingleMock(overrides: { single?: { data: unknown; error: unknown } }) {
+function makeSingleMock(overrides: { single?: { data: unknown; error: unknown } }, existingPositions: number[] = []) {
   const single = vi.fn().mockResolvedValue(overrides.single ?? { data: episodeRow, error: null })
-  const select = vi.fn().mockReturnValue({ single })
-  const insert = vi.fn().mockReturnValue({ select })
-  const eq = vi.fn().mockReturnValue({ select })
+  const insertSelect = vi.fn().mockReturnValue({ single })
+  const insert = vi.fn().mockReturnValue({ select: insertSelect })
+  const updateSelect = vi.fn().mockReturnValue({ single })
+  const eq = vi.fn().mockReturnValue({ select: updateSelect })
   const update = vi.fn().mockReturnValue({ eq })
-  const from = vi.fn().mockReturnValue({ insert, update })
+  const limit = vi.fn().mockResolvedValue({ data: existingPositions.map((position) => ({ position })), error: null })
+  const order = vi.fn().mockReturnValue({ limit })
+  const nextPositionSelect = vi.fn().mockReturnValue({ order })
+  const from = vi.fn().mockReturnValue({ insert, update, select: nextPositionSelect })
   return { from } as unknown as SupabaseClient
 }
 
@@ -63,7 +69,14 @@ describe('createEpisode', () => {
       englishContentStart: null,
       englishContentEnd: null,
       published: true,
+      position: 0,
     })
+  })
+
+  it('assigns the next position after the current max', async () => {
+    const supabase = makeSingleMock({ single: { data: { ...episodeRow, position: 3 }, error: null } }, [2])
+    const result = await createEpisode(supabase, { title: 'X', cantoneseVideoId: 'a', englishVideoId: 'b' })
+    expect(result.position).toBe(3)
   })
 
   it('throws when the insert fails', async () => {
@@ -96,6 +109,7 @@ describe('listEpisodes', () => {
         englishContentStart: null,
         englishContentEnd: null,
         published: true,
+        position: 0,
       },
     ])
   })
@@ -129,6 +143,7 @@ describe('listPublishedEpisodes', () => {
         englishContentStart: null,
         englishContentEnd: null,
         published: true,
+        position: 0,
       },
     ])
     expect(supabase.eq).toHaveBeenCalledWith('published', true)
@@ -271,6 +286,84 @@ describe('deleteEpisode', () => {
   it('throws when the delete fails', async () => {
     const supabase = makeDeleteEpisodeMock({ error: { message: 'boom' } })
     await expect(deleteEpisode(supabase, 'ep-1')).rejects.toThrow('Failed to delete episode ep-1: boom')
+  })
+})
+
+function makeEpisodeRow(overrides: Partial<typeof episodeRow>) {
+  return { ...episodeRow, ...overrides }
+}
+
+function makeMoveEpisodeMock(
+  rows: Array<ReturnType<typeof makeEpisodeRow>>,
+  overrides: { listError?: unknown; failUpdateForId?: string } = {}
+) {
+  const order = vi.fn().mockResolvedValue({ data: overrides.listError ? null : rows, error: overrides.listError ?? null })
+  const listSelect = vi.fn().mockReturnValue({ order })
+
+  const update = vi.fn().mockImplementation((patch: Record<string, unknown>) => ({
+    eq: (_column: string, id: string) => ({
+      select: () => ({
+        single: () => {
+          if (id === overrides.failUpdateForId) {
+            return Promise.resolve({ data: null, error: { message: 'boom' } })
+          }
+          const row = rows.find((candidate) => candidate.id === id)
+          return Promise.resolve({ data: { ...row, ...patch }, error: null })
+        },
+      }),
+    }),
+  }))
+
+  const from = vi.fn().mockReturnValue({ select: listSelect, update })
+  return { from } as unknown as SupabaseClient
+}
+
+describe('moveEpisode', () => {
+  const rows = [
+    makeEpisodeRow({ id: 'ep-1', position: 0 }),
+    makeEpisodeRow({ id: 'ep-2', position: 1 }),
+    makeEpisodeRow({ id: 'ep-3', position: 2 }),
+  ]
+
+  it('swaps position with the previous neighbor when moving up', async () => {
+    const supabase = makeMoveEpisodeMock(rows)
+    const result = await moveEpisode(supabase, 'ep-2', 'up')
+    expect(result.find((episode) => episode.id === 'ep-2')?.position).toBe(0)
+    expect(result.find((episode) => episode.id === 'ep-1')?.position).toBe(1)
+  })
+
+  it('swaps position with the next neighbor when moving down', async () => {
+    const supabase = makeMoveEpisodeMock(rows)
+    const result = await moveEpisode(supabase, 'ep-2', 'down')
+    expect(result.find((episode) => episode.id === 'ep-2')?.position).toBe(2)
+    expect(result.find((episode) => episode.id === 'ep-3')?.position).toBe(1)
+  })
+
+  it('no-ops when moving the first episode up', async () => {
+    const supabase = makeMoveEpisodeMock(rows)
+    const result = await moveEpisode(supabase, 'ep-1', 'up')
+    expect(result).toEqual([expect.objectContaining({ id: 'ep-1', position: 0 })])
+  })
+
+  it('no-ops when moving the last episode down', async () => {
+    const supabase = makeMoveEpisodeMock(rows)
+    const result = await moveEpisode(supabase, 'ep-3', 'down')
+    expect(result).toEqual([expect.objectContaining({ id: 'ep-3', position: 2 })])
+  })
+
+  it('throws when the episode is not found', async () => {
+    const supabase = makeMoveEpisodeMock(rows)
+    await expect(moveEpisode(supabase, 'missing', 'up')).rejects.toThrow('Episode missing not found')
+  })
+
+  it('throws when listing episodes fails', async () => {
+    const supabase = makeMoveEpisodeMock(rows, { listError: { message: 'boom' } })
+    await expect(moveEpisode(supabase, 'ep-2', 'up')).rejects.toThrow('Failed to list episodes: boom')
+  })
+
+  it('throws when one of the position updates fails', async () => {
+    const supabase = makeMoveEpisodeMock(rows, { failUpdateForId: 'ep-1' })
+    await expect(moveEpisode(supabase, 'ep-2', 'up')).rejects.toThrow('Failed to move episode ep-2: boom')
   })
 })
 

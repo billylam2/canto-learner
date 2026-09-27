@@ -134,21 +134,21 @@ export function WaveformMarking({
       <div className="flex gap-2 items-center">
         <button
           onClick={() => setPixelsPerSecond((p) => Math.max(MIN_PIXELS_PER_SECOND, p / 1.5))}
-          className="border p-1 rounded"
+          className="border dark:border-gray-600 p-1 rounded"
           title="Zoom out"
         >
           -
         </button>
         <button
           onClick={() => setPixelsPerSecond((p) => Math.min(MAX_PIXELS_PER_SECOND, p * 1.5))}
-          className="border p-1 rounded"
+          className="border dark:border-gray-600 p-1 rounded"
           title="Zoom in"
         >
           +
         </button>
       </div>
 
-      <div className="text-xs text-gray-500">Cantonese</div>
+      <div className="text-xs text-gray-500 dark:text-gray-400">Cantonese</div>
       <WaveformTrack
         peaks={cantoPeaks}
         bucketMs={BUCKET_MS}
@@ -168,7 +168,7 @@ export function WaveformMarking({
         onResyncDrag={noop}
       />
 
-      <div className="text-xs text-gray-500 mt-2">English</div>
+      <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">English</div>
       <WaveformTrack
         peaks={englishPeaks}
         bucketMs={BUCKET_MS}
@@ -190,10 +190,10 @@ export function WaveformMarking({
 
       {pendingRange && (
         <div className="flex gap-2 items-center">
-          <button onClick={() => setPendingRange(null)} className="border p-1 rounded" title="Discard this selection">
+          <button onClick={() => setPendingRange(null)} className="border dark:border-gray-600 p-1 rounded" title="Discard this selection">
             Cancel selection
           </button>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-gray-500 dark:text-gray-400">
             Canto {pendingRange.start.toFixed(2)}s – {pendingRange.end.toFixed(2)}s
             {englishPendingRange && (
               <>
@@ -208,13 +208,13 @@ export function WaveformMarking({
       <button
         onClick={confirmSegment}
         disabled={!pendingRange || !englishPendingRange}
-        className="border p-2 rounded self-start"
+        className="border dark:border-gray-600 p-2 rounded self-start"
         title="Save this range as a segment on both dubs"
       >
         Confirm segment
       </button>
       {confirmError && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="text-red-600 dark:text-red-400">
           {confirmError}
         </p>
       )}

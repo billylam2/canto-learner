@@ -18,7 +18,7 @@ export default async function HomePage() {
     return (
       <main className="max-w-2xl mx-auto p-6">
         <h1 className="text-2xl font-bold mb-4">Peppa 豬</h1>
-        <p className="text-gray-500">No episodes yet.</p>
+        <p className="text-gray-500 dark:text-gray-400">No episodes yet.</p>
       </main>
     )
   }
